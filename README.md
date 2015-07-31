@@ -1,3 +1,14 @@
+
+Simple client and server for libquic
+=============================================
+
+The purpose is to learn QUIC interfaces by creating simplified client and server
+(no SPDY) and to check the workability of libquic.
+
+
+From the original project:
+=============================================
+
 QUIC, a multiplexed stream transport over UDP
 =============================================
 
