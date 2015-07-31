@@ -295,6 +295,28 @@ set(
 	src/crypto/secure_util.cc
 )
 
+set(
+    NET_TOOLS_EPOLL
+
+    src/net/tools/epoll_server/epoll_server.cc
+)
+
+set(
+    NET_TOOLS_QUIC_SOURCES
+
+    src/net/tools/quic/quic_epoll_clock.cc
+    src/net/tools/quic/quic_epoll_connection_helper.cc
+    src/net/tools/quic/quic_socket_utils.cc
+    src/net/tools/quic/quic_packet_reader.cc
+    src/net/tools/quic/quic_default_packet_writer.cc
+    src/net/tools/quic/quic_per_connection_packet_writer.cc
+    src/net/tools/quic/quic_dispatcher.cc
+    src/net/tools/quic/quic_time_wait_list_manager.cc
+    src/net/tools/quic/quic_server_session.cc
+    src/net/tools/quic/quic_simple_server_stream.cc
+    src/net/tools/quic/quic_server.cc
+)
+
 add_library(
 	quic
 	STATIC
@@ -321,6 +343,22 @@ add_library(
 	src/third_party/zlib/gzread.c
 	src/third_party/zlib/uncompr.c
 )
+
+add_library(
+    net_tools
+    STATIC
+
+    ${NET_TOOLS_EPOLL}
+    ${NET_TOOLS_QUIC_SOURCES}
+)
+
+add_executable(
+    quic_server
+
+    src/net/tools/quic/quic_server_bin.cc
+#    src/net/base/ip_address_number.cc
+)
+target_link_libraries(quic_server net_tools quic protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
 
 #add_executable(
 #	test_quic_server
