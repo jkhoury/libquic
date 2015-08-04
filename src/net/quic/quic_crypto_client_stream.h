@@ -12,11 +12,12 @@
 #include "net/quic/crypto/quic_crypto_client_config.h"
 #include "net/quic/quic_config.h"
 #include "net/quic/quic_crypto_stream.h"
+#include "net/quic/quic_client_session_base.h"
 #include "net/quic/quic_server_id.h"
 
 namespace net {
 
-class QuicClientSessionBase;
+class QuicClientSessionProofInterface;
 
 namespace test {
 class CryptoTestUtils;
@@ -26,7 +27,7 @@ class QuicClientSessionPeer;
 class NET_EXPORT_PRIVATE QuicCryptoClientStream : public QuicCryptoStream {
  public:
   QuicCryptoClientStream(const QuicServerId& server_id,
-                         QuicClientSessionBase* session,
+                         QuicSession* session,
                          ProofVerifyContext* verify_context,
                          QuicCryptoClientConfig* crypto_config);
   ~QuicCryptoClientStream() override;
@@ -48,6 +49,12 @@ class NET_EXPORT_PRIVATE QuicCryptoClientStream : public QuicCryptoStream {
   // Returns true if our ChannelIDSourceCallback was run, which implies the
   // ChannelIDSource operated asynchronously. Intended for testing.
   bool WasChannelIDSourceCallbackRun() const;
+
+  void SetClientSessionProofInterface(
+      QuicClientSessionProofInterface* proof_interface) {
+    // Not owned.
+    client_session_proof_interface_ = proof_interface;
+  }
 
  private:
   // ChannelIDSourceCallbackImpl is passed as the callback method to
@@ -161,8 +168,6 @@ class NET_EXPORT_PRIVATE QuicCryptoClientStream : public QuicCryptoStream {
   // and the client config settings also allow sending a ChannelID.
   bool RequiresChannelID(QuicCryptoClientConfig::CachedState* cached);
 
-  QuicClientSessionBase* client_session();
-
   State next_state_;
   // num_client_hellos_ contains the number of client hello messages that this
   // connection has sent.
@@ -201,6 +206,8 @@ class NET_EXPORT_PRIVATE QuicCryptoClientStream : public QuicCryptoStream {
   // proof_verify_callback_ contains the callback object that we passed to an
   // asynchronous proof verification. The ProofVerifier owns this object.
   ProofVerifierCallbackImpl* proof_verify_callback_;
+
+  QuicClientSessionProofInterface* client_session_proof_interface_;
 
   // These members are used to store the result of an asynchronous proof
   // verification. These members must not be used after

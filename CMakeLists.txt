@@ -315,6 +315,11 @@ set(
     src/net/tools/quic/quic_server_session.cc
     src/net/tools/quic/quic_simple_server_stream.cc
     src/net/tools/quic/quic_server.cc
+# client
+    src/net/tools/quic/quic_client_session.cc
+    src/net/tools/quic/quic_simple_client_stream.cc
+    src/net/tools/quic/quic_client.cc
+#    src/net/tools/quic/
 )
 
 add_library(
@@ -359,6 +364,14 @@ add_executable(
 #    src/net/base/ip_address_number.cc
 )
 target_link_libraries(quic_server net_tools quic protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
+
+add_executable(
+    quic_client
+
+    src/net/tools/quic/quic_client_bin.cc
+#    src/net/base/ip_address_number.cc
+)
+target_link_libraries(quic_client net_tools quic protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
 
 #add_executable(
 #	test_quic_server

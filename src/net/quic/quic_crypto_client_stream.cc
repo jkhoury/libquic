@@ -77,7 +77,7 @@ void QuicCryptoClientStream::ProofVerifierCallbackImpl::Cancel() {
 
 QuicCryptoClientStream::QuicCryptoClientStream(
     const QuicServerId& server_id,
-    QuicClientSessionBase* session,
+    QuicSession* session,
     ProofVerifyContext* verify_context,
     QuicCryptoClientConfig* crypto_config)
     : QuicCryptoStream(session),
@@ -91,6 +91,7 @@ QuicCryptoClientStream::QuicCryptoClientStream(
       channel_id_source_callback_(nullptr),
       verify_context_(verify_context),
       proof_verify_callback_(nullptr),
+      client_session_proof_interface_(nullptr),
       stateless_reject_received_(false) {
   DCHECK_EQ(Perspective::IS_CLIENT, session->connection()->perspective());
 }
@@ -334,8 +335,8 @@ void QuicCryptoClientStream::DoSendCHLO(
     return;
   }
   channel_id_sent_ = (channel_id_key_.get() != nullptr);
-  if (cached->proof_verify_details()) {
-    client_session()->OnProofVerifyDetailsAvailable(
+  if (cached->proof_verify_details() && client_session_proof_interface_) {
+    client_session_proof_interface_->OnProofVerifyDetailsAvailable(
         *cached->proof_verify_details());
   }
   next_state_ = STATE_RECV_SHLO;
@@ -452,8 +453,10 @@ void QuicCryptoClientStream::DoVerifyProofComplete(
     QuicCryptoClientConfig::CachedState* cached) {
   if (!verify_ok_) {
     next_state_ = STATE_NONE;
-    if (verify_details_.get()) {
-      client_session()->OnProofVerifyDetailsAvailable(*verify_details_);
+    if (verify_details_.get() &&
+        client_session_proof_interface_) {
+      client_session_proof_interface_->OnProofVerifyDetailsAvailable(
+                                                    *verify_details_);
     }
     UMA_HISTOGRAM_BOOLEAN("Net.QuicVerifyProofFailed.HandshakeConfirmed",
                           handshake_confirmed());
@@ -616,7 +619,9 @@ void QuicCryptoClientStream::DoInitializeServerConfigUpdate(
 void QuicCryptoClientStream::SetCachedProofValid(
     QuicCryptoClientConfig::CachedState* cached) {
   cached->SetProofValid();
-  client_session()->OnProofValid(*cached);
+  if (client_session_proof_interface_) {
+    client_session_proof_interface_->OnProofValid(*cached);
+  }
 }
 
 bool QuicCryptoClientStream::RequiresChannelID(
@@ -642,10 +647,6 @@ bool QuicCryptoClientStream::RequiresChannelID(
     }
   }
   return false;
-}
-
-QuicClientSessionBase* QuicCryptoClientStream::client_session() {
-  return reinterpret_cast<QuicClientSessionBase*>(session());
 }
 
 }  // namespace net
