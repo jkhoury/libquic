@@ -56,6 +56,11 @@ QuicClientSession::QuicClientSession(const QuicConfig& config,
           new ProofVerifyContextFake(),
           crypto_config)),
       respect_goaway_(true) {
+  // TODO(dimm): This is our way of skipping stream_id=3 (SPDY headers stream)
+  // because some QUIC code (e.g. quic_write_blocked_list.h(76)) fails 
+  // misinterpreting a non-headers stream for the headers one.
+  QuicStreamId headers_stream_id = GetNextStreamId();
+  (void) headers_stream_id;
 }
 
 QuicClientSession::~QuicClientSession() {

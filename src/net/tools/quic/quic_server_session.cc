@@ -10,7 +10,7 @@
 #include "net/quic/quic_flags.h"
 #include "net/quic/quic_spdy_session.h"
 #include "net/quic/reliable_quic_stream.h"
-#include "net/tools/quic/quic_simple_server_stream.h"
+#include "net/tools/quic/file_downloader_server_stream.h"
 
 namespace net {
 namespace tools {
@@ -204,7 +204,7 @@ ReliableQuicStream* QuicServerSession::CreateIncomingDynamicStream(
     return nullptr;
   }
 
-  return new QuicSimpleServerStream(id, this);
+  return new FileDownloaderServerStream(id, this);
 }
 
 ReliableQuicStream* QuicServerSession::CreateOutgoingDynamicStream() {

@@ -325,7 +325,7 @@ int main(int argc, char *argv[]) {
          << ". Error: " << net::QuicUtils::ErrorToString(error) << endl;
     return 1;
   }
-  cout << "Connected to " << host_port << endl;
+//  cout << "Connected to " << host_port << endl;
 
   // Make sure to store the response, for later output.
   client.set_store_response(true);
@@ -337,7 +337,6 @@ int main(int argc, char *argv[]) {
 
   // Print request and response details.
   if (!FLAGS_quiet) {
-    cout << "Response:" << endl;
-    cout << "body: " << client.latest_response_body() << endl;
+    cout << client.latest_response_body();
   }
 }
