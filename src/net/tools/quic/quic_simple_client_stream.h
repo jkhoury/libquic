@@ -20,8 +20,23 @@ namespace tools {
 static const QuicPriority kDefaultPriority = 3;
 class QuicClientSession;
 
-class QuicSimpleClientStream : public QuicDataStream /*ReliableQuicStream*/ {
+class QuicSimpleClientStream : public ReliableQuicStream /*ReliableQuicStream*/ {
  public:
+  // Visitor receives callbacks from the stream.
+  class NET_EXPORT_PRIVATE Visitor {
+   public:
+    Visitor() {}
+
+    // Called when the stream is closed.
+    virtual void OnClose(QuicSimpleClientStream* stream) = 0;
+
+   protected:
+    virtual ~Visitor() {}
+
+   private:
+    DISALLOW_COPY_AND_ASSIGN(Visitor);
+  };
+
   QuicSimpleClientStream(QuicStreamId id, QuicClientSession* session);
   ~QuicSimpleClientStream() override;
 
@@ -31,7 +46,11 @@ class QuicSimpleClientStream : public QuicDataStream /*ReliableQuicStream*/ {
 
   // ReliableQuicStream implementation called by the session when there's
   // data for us.
-  uint32 ProcessData(const char* data, uint32 data_len) override;
+  // ReliableQuicStream implementation
+  void OnClose() override;
+  uint32 ProcessRawData(const char* data, uint32 data_len) override;
+
+//  uint32 ProcessData(const char* data, uint32 data_len) override;
 
   bool SendRequest(const std::string& request, bool fin);
 
@@ -40,8 +59,11 @@ class QuicSimpleClientStream : public QuicDataStream /*ReliableQuicStream*/ {
   // Returns the response data.
   const std::string& data() { return data_; }
 
+  void set_visitor(Visitor* visitor) { visitor_ = visitor; }
+
  private:
   std::string data_;
+  Visitor* visitor_;
 
   DISALLOW_COPY_AND_ASSIGN(QuicSimpleClientStream);
 };

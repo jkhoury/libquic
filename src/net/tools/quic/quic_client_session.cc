@@ -48,7 +48,7 @@ QuicClientSession::QuicClientSession(const QuicConfig& config,
                                      QuicConnection* connection,
                                      const QuicServerId& server_id,
                                      QuicCryptoClientConfig* crypto_config)
-    : QuicClientSessionBase(connection, config),
+    : QuicSession(connection, config),
       crypto_stream_(new QuicCryptoClientStream(
           server_id,
           this,
@@ -60,13 +60,13 @@ QuicClientSession::QuicClientSession(const QuicConfig& config,
 
 QuicClientSession::~QuicClientSession() {
 }
-
+#if 0
 void QuicClientSession::OnProofValid(
     const QuicCryptoClientConfig::CachedState& /*cached*/) {}
 
 void QuicClientSession::OnProofVerifyDetailsAvailable(
     const ProofVerifyDetails& /*verify_details*/) {}
-
+#endif
 QuicSimpleClientStream* QuicClientSession::CreateOutgoingDynamicStream() {
   if (!crypto_stream_->encryption_established()) {
     DVLOG(1) << "Encryption not active so no outgoing stream created.";

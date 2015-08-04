@@ -37,7 +37,7 @@ class QuicClientPeer;
 }  // namespace test
 
 class QuicClient : public EpollCallbackInterface,
-                   public QuicDataStream::Visitor {
+                   public QuicSimpleClientStream::Visitor {
  public:
   // A packet writer factory that always returns the same writer.
   class DummyPacketWriterFactory : public QuicConnection::PacketWriterFactory {
@@ -119,7 +119,7 @@ class QuicClient : public EpollCallbackInterface,
   void OnShutdown(EpollServer* eps, int fd) override {}
 
   // QuicSimpleClientStream::Visitor
-  void OnClose(QuicDataStream* stream) override;
+  void OnClose(QuicSimpleClientStream* stream) override;
 
   QuicClientSession* session() { return session_.get(); }
 

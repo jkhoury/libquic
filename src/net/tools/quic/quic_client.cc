@@ -269,8 +269,8 @@ void QuicClient::SendRequest(const string& request,
     LOG(DFATAL) << "stream creation failed!";
     return;
   }
-  stream->SendRequest(request, fin);
   stream->set_visitor(this);
+  stream->SendRequest(request, fin);
 }
 
 void QuicClient::SendRequestsAndWaitForResponse(
@@ -328,7 +328,7 @@ void QuicClient::OnEvent(int fd, EpollEvent* event) {
   }
 }
 
-void QuicClient::OnClose(QuicDataStream* stream) {
+void QuicClient::OnClose(QuicSimpleClientStream* stream) {
   QuicSimpleClientStream* client_stream =
           static_cast<QuicSimpleClientStream*>(stream);
 

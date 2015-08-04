@@ -10,7 +10,7 @@
 #include <string>
 
 #include "base/basictypes.h"
-#include "net/quic/quic_client_session_base.h"
+#include "net/quic/quic_session.h"
 #include "net/quic/quic_crypto_client_stream.h"
 #include "net/quic/quic_protocol.h"
 #include "net/tools/quic/quic_simple_client_stream.h"
@@ -23,7 +23,7 @@ class ReliableQuicStream;
 
 namespace tools {
 
-class QuicClientSession : public QuicClientSessionBase {
+class QuicClientSession : public QuicSession {
  public:
   QuicClientSession(const QuicConfig& config,
                     QuicConnection* connection,
@@ -34,12 +34,12 @@ class QuicClientSession : public QuicClientSessionBase {
   // QuicSession methods:
   QuicSimpleClientStream* CreateOutgoingDynamicStream() override;
   QuicCryptoClientStream* GetCryptoStream() override;
-
+#if 0
   // QuicClientSessionBase methods:
   void OnProofValid(const QuicCryptoClientConfig::CachedState& cached) override;
   void OnProofVerifyDetailsAvailable(
                     const ProofVerifyDetails& verify_details) override;
-
+#endif
   // Performs a crypto handshake with the server.
   void CryptoConnect();
 
