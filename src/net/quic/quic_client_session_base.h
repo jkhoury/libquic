@@ -10,13 +10,9 @@
 
 namespace net {
 
-// Base class for all client-specific QuicSession subclasses.
-class NET_EXPORT_PRIVATE QuicClientSessionBase : public QuicSpdySession {
+class NET_EXPORT_PRIVATE QuicClientSessionProofInterface {
  public:
-  QuicClientSessionBase(QuicConnection* connection,
-                        const QuicConfig& config);
-
-  ~QuicClientSessionBase() override;
+  virtual ~QuicClientSessionProofInterface();
 
   // Called when the proof in |cached| is marked valid.  If this is a secure
   // QUIC session, then this will happen only after the proof verifier
@@ -31,6 +27,17 @@ class NET_EXPORT_PRIVATE QuicClientSessionBase : public QuicSpdySession {
   // will only be called for secure QUIC connections.
   virtual void OnProofVerifyDetailsAvailable(
       const ProofVerifyDetails& verify_details) = 0;
+};
+
+// Base class for all client-specific QuicSession subclasses.
+class NET_EXPORT_PRIVATE QuicClientSessionBase
+    : public QuicSpdySession,
+      public QuicClientSessionProofInterface {
+ public:
+  QuicClientSessionBase(QuicConnection* connection,
+                        const QuicConfig& config);
+
+  ~QuicClientSessionBase() override;
 
   // Override base class to set FEC policy before any data is sent by client.
   void OnCryptoHandshakeEvent(CryptoHandshakeEvent event) override;
