@@ -30,12 +30,18 @@ class FileDownloaderServerStream : public ReliableQuicStream {
   void OnFinRead() override;
   QuicPriority EffectivePriority() const override { return kDefaultPriority; }
 
+  static void SetHomeDir(const std::string& home_dir) {
+    HomeDir = home_dir;
+  }
+
  protected:
   bool MapFileIntoMemory();
   void StartFileDownload();
   void SendNextFileBlock();
 
  private:
+  static std::string HomeDir;
+
   std::string request_;
 
   // TODO(dimm): Consider using Chromium's base/files/memory_mapped_file.h.

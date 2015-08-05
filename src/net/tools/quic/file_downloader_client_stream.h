@@ -10,8 +10,7 @@
 
 #include "base/basictypes.h"
 #include "base/strings/string_piece.h"
-//#include "net/quic/reliable_quic_stream.h"
-#include "net/quic/quic_data_stream.h"
+#include "net/quic/reliable_quic_stream.h"
 #include "net/quic/quic_protocol.h"
 
 namespace net {
@@ -20,7 +19,7 @@ namespace tools {
 static const QuicPriority kDefaultPriority = 3;
 class QuicClientSession;
 
-class QuicSimpleClientStream : public ReliableQuicStream /*ReliableQuicStream*/ {
+class FileDownloaderClientStream : public ReliableQuicStream /*ReliableQuicStream*/ {
  public:
   // Visitor receives callbacks from the stream.
   class NET_EXPORT_PRIVATE Visitor {
@@ -28,7 +27,7 @@ class QuicSimpleClientStream : public ReliableQuicStream /*ReliableQuicStream*/ 
     Visitor() {}
 
     // Called when the stream is closed.
-    virtual void OnClose(QuicSimpleClientStream* stream) = 0;
+    virtual void OnClose(FileDownloaderClientStream* stream) = 0;
 
    protected:
     virtual ~Visitor() {}
@@ -37,8 +36,10 @@ class QuicSimpleClientStream : public ReliableQuicStream /*ReliableQuicStream*/ 
     DISALLOW_COPY_AND_ASSIGN(Visitor);
   };
 
-  QuicSimpleClientStream(QuicStreamId id, QuicClientSession* session);
-  ~QuicSimpleClientStream() override;
+  FileDownloaderClientStream(QuicStreamId id, QuicClientSession* session);
+  ~FileDownloaderClientStream() override;
+
+  bool SendRequest(const std::string& request, bool fin);
 
   // Override the base class to close the write side as soon as we get a
   // response.
@@ -50,22 +51,17 @@ class QuicSimpleClientStream : public ReliableQuicStream /*ReliableQuicStream*/ 
   void OnClose() override;
   uint32 ProcessRawData(const char* data, uint32 data_len) override;
 
-//  uint32 ProcessData(const char* data, uint32 data_len) override;
-
-  bool SendRequest(const std::string& request, bool fin);
-
   QuicPriority EffectivePriority() const override { return kDefaultPriority; }
-
-  // Returns the response data.
-  const std::string& data() { return data_; }
 
   void set_visitor(Visitor* visitor) { visitor_ = visitor; }
 
  private:
-  std::string data_;
-  Visitor* visitor_;
+  bool OpenFile(const std::string& filename);
 
-  DISALLOW_COPY_AND_ASSIGN(QuicSimpleClientStream);
+  Visitor* visitor_;
+  int fd_;
+
+  DISALLOW_COPY_AND_ASSIGN(FileDownloaderClientStream);
 };
 
 }  // namespace tools

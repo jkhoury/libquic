@@ -20,7 +20,7 @@
 #include "net/tools/epoll_server/epoll_server.h"
 #include "net/tools/quic/quic_epoll_connection_helper.h"
 #include "net/tools/quic/quic_socket_utils.h"
-#include "net/tools/quic/quic_simple_client_stream.h"
+#include "net/tools/quic/file_downloader_client_stream.h"
 
 #include "net/tools/quic/net_util.h"
 
@@ -50,9 +50,7 @@ QuicClient::QuicClient(IPEndPoint server_address,
       packets_dropped_(0),
       overflow_supported_(false),
       supported_versions_(supported_versions),
-      store_response_(false),
-      store_response_body_and_headers_(true),
-      latest_response_code_(-1) {
+      store_response_(false) {
 }
 
 QuicClient::QuicClient(IPEndPoint server_address,
@@ -71,9 +69,7 @@ QuicClient::QuicClient(IPEndPoint server_address,
       packets_dropped_(0),
       overflow_supported_(false),
       supported_versions_(supported_versions),
-      store_response_(false),
-      store_response_body_and_headers_(true),
-      latest_response_code_(-1) {
+      store_response_(false) {
 }
 
 QuicClient::~QuicClient() {
@@ -156,17 +152,16 @@ bool QuicClient::CreateUDPSocket() {
     LOG(ERROR) << "IP detection not supported" << strerror(errno);
     return false;
   }
-#if 0
+
   if (bind_to_address_.size() != 0) {
     client_address_ = IPEndPoint(bind_to_address_, local_port_);
   } else if (address_family == AF_INET) {
-    // TODO(dimm): fix address translations.
-    IPAddressNumber any4(16, 0);
-//    CHECK(net::ParseIPLiteralToNumber("0.0.0.0", &any4));
+    IPAddressNumber any4;
+    CHECK(net::ParseIPLiteralToNumber("0.0.0.0", &any4));
     client_address_ = IPEndPoint(any4, local_port_);
   } else {
-    IPAddressNumber any6(16, 0);
-//    CHECK(net::ParseIPLiteralToNumber("::", &any6));
+    IPAddressNumber any6;
+    CHECK(net::ParseIPLiteralToNumber("::", &any6));
     client_address_ = IPEndPoint(any6, local_port_);
   }
 
@@ -181,7 +176,7 @@ bool QuicClient::CreateUDPSocket() {
     LOG(ERROR) << "Bind failed: " << strerror(errno);
     return false;
   }
-#endif
+
   SockaddrStorage storage;
   if (getsockname(fd_, storage.addr, &storage.addr_len) != 0 ||
       !client_address_.FromSockAddr(storage.addr, storage.addr_len)) {
@@ -262,31 +257,29 @@ void QuicClient::CleanUpUDPSocketImpl() {
   }
 }
 
-void QuicClient::SendRequest(const string& request,
+bool QuicClient::SendRequest(const string& request,
                              bool fin) {
-  QuicSimpleClientStream* stream = CreateSimpleClientStream();
+  if (!connected()) {
+    return false;
+  }
+
+  FileDownloaderClientStream* stream = session_->CreateOutgoingDynamicStream();
   if (stream == nullptr) {
     LOG(DFATAL) << "stream creation failed!";
-    return;
+    return false;
   }
   stream->set_visitor(this);
-  stream->SendRequest(request, fin);
+  return stream->SendRequest(request, fin);
 }
 
 void QuicClient::SendRequestsAndWaitForResponse(
     const vector<string>& url_list) {
+  bool any_request_succedded = false;
   for (size_t i = 0; i < url_list.size(); ++i) {
-    SendRequest(url_list[i], true);
+    any_request_succedded |= SendRequest(url_list[i], true);
   }
-  while (WaitForEvents()) {}
-}
-
-QuicSimpleClientStream* QuicClient::CreateSimpleClientStream() {
-  if (!connected()) {
-    return nullptr;
-  }
-
-  return session_->CreateOutgoingDynamicStream();
+  if (any_request_succedded)
+    while (WaitForEvents()) {}
 }
 
 void QuicClient::WaitForStreamToClose(QuicStreamId id) {
@@ -328,16 +321,8 @@ void QuicClient::OnEvent(int fd, EpollEvent* event) {
   }
 }
 
-void QuicClient::OnClose(QuicSimpleClientStream* stream) {
-  QuicSimpleClientStream* client_stream =
-          static_cast<QuicSimpleClientStream*>(stream);
-
-  LOG(ERROR) << "OnClose() for StreamID " << stream->id();
-
-  // Store response headers and body.
-  if (store_response_) {
-    latest_response_body_ = client_stream->data();
-  }
+void QuicClient::OnClose(FileDownloaderClientStream* stream) {
+  DVLOG(1) << "OnClose() for StreamID " << stream->id();
 }
 
 bool QuicClient::connected() const {
@@ -347,21 +332,6 @@ bool QuicClient::connected() const {
 
 bool QuicClient::goaway_received() const {
   return session_ != nullptr && session_->goaway_received();
-}
-
-size_t QuicClient::latest_response_code() const {
-  LOG_IF(DFATAL, !store_response_) << "Response not stored!";
-  return latest_response_code_;
-}
-
-const string& QuicClient::latest_response_headers() const {
-  LOG_IF(DFATAL, !store_response_) << "Response not stored!";
-  return latest_response_headers_;
-}
-
-const string& QuicClient::latest_response_body() const {
-  LOG_IF(DFATAL, !store_response_) << "Response not stored!";
-  return latest_response_body_;
 }
 
 QuicConnectionId QuicClient::GenerateConnectionId() {

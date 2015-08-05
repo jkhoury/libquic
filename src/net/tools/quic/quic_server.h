@@ -16,7 +16,6 @@
 #include "net/base/ip_endpoint.h"
 #include "net/quic/crypto/quic_crypto_server_config.h"
 #include "net/quic/quic_config.h"
-//#include "net/quic/quic_connection_helper.h"
 #include "net/quic/quic_framer.h"
 #include "net/tools/epoll_server/epoll_server.h"
 #include "net/tools/quic/quic_default_packet_writer.h"
@@ -24,11 +23,6 @@
 namespace net {
 namespace tools {
 
-namespace test {
-class QuicServerPeer;
-}  // namespace test
-
-class ProcessPacketInterface;
 class QuicDispatcher;
 class QuicPacketReader;
 
@@ -90,8 +84,6 @@ class QuicServer : public EpollCallbackInterface {
   QuicDispatcher* dispatcher() { return dispatcher_.get(); }
 
  private:
-  friend class net::tools::test::QuicServerPeer;
-
   // Initialize the internal state of the server.
   void Initialize();
 

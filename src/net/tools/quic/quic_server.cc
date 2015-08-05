@@ -21,7 +21,6 @@
 #include "net/tools/quic/quic_dispatcher.h"
 #include "net/tools/quic/quic_epoll_clock.h"
 #include "net/tools/quic/quic_epoll_connection_helper.h"
-//#include "net/tools/quic/quic_in_memory_cache.h"
 #include "net/tools/quic/quic_packet_reader.h"
 #include "net/tools/quic/quic_socket_utils.h"
 
@@ -38,12 +37,16 @@ namespace net {
 namespace tools {
 namespace {
 
-// Specifies the directory used during QuicInMemoryCache
-// construction to seed the cache. Cache directory can be
-// generated using `wget -p --save-headers <url>`
-std::string FLAGS_quic_in_memory_cache_dir = "";
-
 const int kEpollFlags = EPOLLIN | EPOLLOUT | EPOLLET;
+
+// TODO(dimm): this secret is used to build source-address-tockens.
+// IIRC these tokens are given to clients and can be used to prove
+// their identity (that they do own their IP address).
+//
+// How should it be used in production? Random token upon
+// each invocation (thus invalidating "known" clients if the server
+// crushes or restarts?
+// TODO: read the QUIC crypto doc.
 const char kSourceAddressTokenSecret[] = "secret";
 
 }  // namespace
@@ -81,8 +84,8 @@ void QuicServer::Initialize() {
 
   // If an initial flow control window has not explicitly been set, then use a
   // sensible value for a server: 1 MB for session, 64 KB for each stream.
-  const uint32 kInitialSessionFlowControlWindow = 32 * 1024 * 1024;  // 32 MB
-  const uint32 kInitialStreamFlowControlWindow = 1 * 1024 * 1024;    // 1 MB
+  const uint32 kInitialSessionFlowControlWindow = 1 * 1024 * 1024;  // 1 MB
+  const uint32 kInitialStreamFlowControlWindow = 64 * 1024;         // 64 KB
   if (config_.GetInitialStreamFlowControlWindowToSend() ==
       kMinimumFlowControlSendWindow) {
     config_.SetInitialStreamFlowControlWindowToSend(
@@ -95,12 +98,6 @@ void QuicServer::Initialize() {
   }
 
   epoll_server_.set_timeout_in_us(50 * 1000);
-
-//  if (!FLAGS_quic_in_memory_cache_dir.empty()) {
-//    QuicInMemoryCache::GetInstance()->InitializeFromDirectory(
-//        FLAGS_quic_in_memory_cache_dir);
-//  }
-
   QuicEpollClock clock(&epoll_server_);
 
   scoped_ptr<CryptoHandshakeMessage> scfg(
@@ -142,11 +139,7 @@ bool QuicServer::Listen(const IPEndPoint& address) {
 
   const uint32 kSocketBufferSize = 32 * 1024 * 1024; // 32 MB
 
-  // These send and receive buffer sizes are sized for a single connection,
-  // because the default usage of QuicServer is as a test server with one or
-  // two clients.  Adjust higher for use with many clients.
-  if (!QuicSocketUtils::SetReceiveBufferSize(fd_,
-                                             kSocketBufferSize)) {
+  if (!QuicSocketUtils::SetReceiveBufferSize(fd_, kSocketBufferSize)) {
     return false;
   }
 

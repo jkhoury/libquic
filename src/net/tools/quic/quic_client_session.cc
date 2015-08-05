@@ -10,7 +10,7 @@
 //#include "net/quic/crypto/proof_verifier_chromium.h"
 #include "net/quic/crypto/proof_verifier.h"
 #include "net/quic/quic_server_id.h"
-#include "net/tools/quic/quic_simple_client_stream.h"
+#include "net/tools/quic/file_downloader_client_stream.h"
 
 using std::string;
 
@@ -72,7 +72,7 @@ void QuicClientSession::OnProofValid(
 void QuicClientSession::OnProofVerifyDetailsAvailable(
     const ProofVerifyDetails& /*verify_details*/) {}
 #endif
-QuicSimpleClientStream* QuicClientSession::CreateOutgoingDynamicStream() {
+FileDownloaderClientStream* QuicClientSession::CreateOutgoingDynamicStream() {
   if (!crypto_stream_->encryption_established()) {
     DVLOG(1) << "Encryption not active so no outgoing stream created.";
     return nullptr;
@@ -87,13 +87,13 @@ QuicSimpleClientStream* QuicClientSession::CreateOutgoingDynamicStream() {
              << "Already received goaway.";
     return nullptr;
   }
-  QuicSimpleClientStream* stream = CreateClientStream();
+  FileDownloaderClientStream* stream = CreateClientStream();
   ActivateStream(stream);
   return stream;
 }
 
-QuicSimpleClientStream* QuicClientSession::CreateClientStream() {
-  return new QuicSimpleClientStream(GetNextStreamId(), this);
+FileDownloaderClientStream* QuicClientSession::CreateClientStream() {
+  return new FileDownloaderClientStream(GetNextStreamId(), this);
 }
 
 QuicCryptoClientStream* QuicClientSession::GetCryptoStream() {
@@ -109,7 +109,7 @@ int QuicClientSession::GetNumSentClientHellos() const {
   return crypto_stream_->num_sent_client_hellos();
 }
 
-QuicSimpleClientStream* QuicClientSession::CreateIncomingDynamicStream(
+FileDownloaderClientStream* QuicClientSession::CreateIncomingDynamicStream(
     QuicStreamId id) {
   DLOG(ERROR) << "Server push not supported";
   return nullptr;

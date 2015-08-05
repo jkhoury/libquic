@@ -209,72 +209,8 @@ bool GetIPAddressFromSockAddr(const struct sockaddr* sock_addr,
   return false;  // Unrecognized |sa_family|.
 }
 
-std::string IPAddressToString(const uint8* address,
-                              size_t address_len) {
-  std::string str;
-  std::stringstream ss;
-
-  if (address_len == kIPv4AddressSize) {
-    url::AppendIPv4Address(address, ss);
-  } else if (address_len == kIPv6AddressSize) {
-    url::AppendIPv6Address(address, ss);
-  } else {
-    CHECK(false) << "Invalid IP address with length: " << address_len;
-  }
-
-  return ss.str();
-}
-
-std::string IPAddressToStringWithPort(const uint8* address,
-                                      size_t address_len,
-                                      uint16 port) {
-  std::string address_str = IPAddressToString(address, address_len);
-
-  if (address_len == kIPv6AddressSize) {
-    // Need to bracket IPv6 addresses since they contain colons.
-    return base::StringPrintf("[%s]:%d", address_str.c_str(), port);
-  }
-  return base::StringPrintf("%s:%d", address_str.c_str(), port);
-}
-
-std::string IPAddressToString(const IPAddressNumber& addr) {
-  return IPAddressToString(&addr.front(), addr.size());
-}
-
-std::string IPAddressToStringWithPort(const IPAddressNumber& addr,
-                                      uint16 port) {
-  return IPAddressToStringWithPort(&addr.front(), addr.size(), port);
-}
-
-std::string IPAddressToPackedString(const IPAddressNumber& addr) {
-  return std::string(reinterpret_cast<const char *>(&addr.front()),
-                     addr.size());
-}
-
 bool IsPortValid(int port) {
   return port >= 0 && port <= std::numeric_limits<uint16>::max();
-}
-
-
-namespace {
-
-const unsigned char kIPv4MappedPrefix[] =
-    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF };
-}
-
-IPAddressNumber ConvertIPv4NumberToIPv6Number(
-    const IPAddressNumber& ipv4_number) {
-  DCHECK(ipv4_number.size() == 4);
-
-  // IPv4-mapped addresses are formed by:
-  // <80 bits of zeros>  + <16 bits of ones> + <32-bit IPv4 address>.
-  IPAddressNumber ipv6_number;
-  ipv6_number.reserve(16);
-  ipv6_number.insert(ipv6_number.end(),
-                     kIPv4MappedPrefix,
-                     kIPv4MappedPrefix + arraysize(kIPv4MappedPrefix));
-  ipv6_number.insert(ipv6_number.end(), ipv4_number.begin(), ipv4_number.end());
-  return ipv6_number;
 }
 
 }  // namespace net
