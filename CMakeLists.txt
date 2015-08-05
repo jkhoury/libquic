@@ -350,6 +350,16 @@ add_library(
 )
 
 add_library(
+  helper
+  STATIC
+
+  src/net/base/ip_address_number.cc
+  src/url/url_canon_ip.cc
+  src/url/url_canon_stdstring.cc
+  src/url/url_canon_internal.cc
+)
+
+add_library(
     net_tools
     STATIC
 
@@ -361,17 +371,15 @@ add_executable(
     quic_server
 
     src/net/tools/quic/quic_server_bin.cc
-#    src/net/base/ip_address_number.cc
 )
-target_link_libraries(quic_server net_tools quic protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
+target_link_libraries(quic_server net_tools quic helper protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
 
 add_executable(
     quic_client
 
     src/net/tools/quic/quic_client_bin.cc
-#    src/net/base/ip_address_number.cc
 )
-target_link_libraries(quic_client net_tools quic protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
+target_link_libraries(quic_client net_tools quic helper protobuf ssl crypto -pthread ${BASE_ARCH_LIBRARIES})
 
 #add_executable(
 #	test_quic_server

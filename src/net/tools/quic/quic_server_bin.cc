@@ -56,9 +56,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  net::IPAddressNumber ip(16, 0);
-//  net::IPAddressNumber ip;
-//  CHECK(net::ParseIPLiteralToNumber("::", &ip));
+  net::IPAddressNumber ip;
+  CHECK(net::ParseIPLiteralToNumber("::", &ip));
 
   net::QuicConfig config;
   net::tools::QuicServer server(config, net::QuicSupportedVersions());

@@ -152,17 +152,16 @@ bool QuicClient::CreateUDPSocket() {
     LOG(ERROR) << "IP detection not supported" << strerror(errno);
     return false;
   }
-#if 0
+
   if (bind_to_address_.size() != 0) {
     client_address_ = IPEndPoint(bind_to_address_, local_port_);
   } else if (address_family == AF_INET) {
-    // TODO(dimm): fix address translations.
-    IPAddressNumber any4(16, 0);
-//    CHECK(net::ParseIPLiteralToNumber("0.0.0.0", &any4));
+    IPAddressNumber any4;
+    CHECK(net::ParseIPLiteralToNumber("0.0.0.0", &any4));
     client_address_ = IPEndPoint(any4, local_port_);
   } else {
-    IPAddressNumber any6(16, 0);
-//    CHECK(net::ParseIPLiteralToNumber("::", &any6));
+    IPAddressNumber any6;
+    CHECK(net::ParseIPLiteralToNumber("::", &any6));
     client_address_ = IPEndPoint(any6, local_port_);
   }
 
@@ -177,7 +176,7 @@ bool QuicClient::CreateUDPSocket() {
     LOG(ERROR) << "Bind failed: " << strerror(errno);
     return false;
   }
-#endif
+
   SockaddrStorage storage;
   if (getsockname(fd_, storage.addr, &storage.addr_len) != 0 ||
       !client_address_.FromSockAddr(storage.addr, storage.addr_len)) {

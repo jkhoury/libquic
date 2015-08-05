@@ -15,6 +15,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "net/base/ip_endpoint.h"
+#include "net/base/ip_address_number.h"
 #include "net/base/net_errors.h"
 #include "net/base/privacy_mode.h"
 //#include "net/cert/cert_verifier.h"
@@ -174,36 +175,18 @@ int main(int argc, char *argv[]) {
 
   base::AtExitManager exit_manager;
 
-  // Determine IP address to connect to from supplied hostname.
-  // TODO(dimm): Shortcut to use a local address.
-  net::IPAddressNumber ip_addr = {127,0,0,1};
-#if 0
-  // TODO(rtenneti): GURL's doesn't support default_protocol argument, thus
-  // protocol is required in the URL.
-  GURL url(urls[0]);
-  string host = FLAGS_host;
-  if (host.empty()) {
-    host = url.host();
+  net::IPAddressNumber ip_addr;
+  if (!net::ParseIPLiteralToNumber(FLAGS_host, &ip_addr)) {
+    LOG(ERROR) << "Unable to parse " << FLAGS_host;
+    return 1;
   }
-  if (!net::ParseIPLiteralToNumber(host, &ip_addr)) {
-    net::AddressList addresses;
-    int rv = net::tools::SynchronousHostResolver::Resolve(host, &addresses);
-    if (rv != net::OK) {
-      LOG(ERROR) << "Unable to resolve '" << host << "' : "
-                 << net::ErrorToShortString(rv);
-      return 1;
-    }
-    ip_addr = addresses[0].address();
-  }
-#endif
+
   string host_port = net::IPAddressToStringWithPort(ip_addr, FLAGS_port);
-//  VLOG(1) << "Resolved " << host << " to " << host_port << endl;
   VLOG(1) << "Resolved " << FLAGS_host << " to " << host_port << endl;
 
   // Build the client, and try to connect.
-  bool is_https = (FLAGS_port == 443);
   net::EpollServer epoll_server;
-  net::QuicServerId server_id(FLAGS_host, FLAGS_port, is_https,
+  net::QuicServerId server_id(FLAGS_host, FLAGS_port, false /*is_https*/,
                               net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector versions = net::QuicSupportedVersions();
   if (FLAGS_quic_version != -1) {
@@ -269,7 +252,7 @@ int main(int argc, char *argv[]) {
          << ". Error: " << net::QuicUtils::ErrorToString(error) << endl;
     return 1;
   }
-//  cout << "Connected to " << host_port << endl;
+  cout << "Connected to " << host_port << endl;
 
   // Make sure to store the response, for later output.
   client.set_store_response(true);
