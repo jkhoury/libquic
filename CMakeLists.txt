@@ -314,12 +314,12 @@ set(
     src/net/tools/quic/quic_time_wait_list_manager.cc
     src/net/tools/quic/quic_server_session.cc
     src/net/tools/quic/quic_server.cc
+
     src/net/tools/quic/file_downloader_server_stream.cc
-# client
+    src/net/tools/quic/file_downloader_client_stream.cc
+
     src/net/tools/quic/quic_client_session.cc
-    src/net/tools/quic/quic_simple_client_stream.cc
     src/net/tools/quic/quic_client.cc
-#    src/net/tools/quic/
 )
 
 add_library(

@@ -5,38 +5,6 @@
 // A binary wrapper for QuicClient.
 // Connects to a host using QUIC, sends a request to the provided URL, and
 // displays the response.
-//
-// Some usage examples:
-//
-//   TODO(rtenneti): make --host optional by getting IP Address of URL's host.
-//
-//   Get IP address of the www.google.com
-//   IP=`dig www.google.com +short | head -1`
-//
-// Standard request/response:
-//   quic_client http://www.google.com  --host=${IP}
-//   quic_client http://www.google.com --quiet  --host=${IP}
-//   quic_client https://www.google.com --port=443  --host=${IP}
-//
-// Use a specific version:
-//   quic_client http://www.google.com --version=23  --host=${IP}
-//
-// Send a POST instead of a GET:
-//   quic_client http://www.google.com --body="this is a POST body" --host=${IP}
-//
-// Append additional headers to the request:
-//   quic_client http://www.google.com  --host=${IP}
-//               --headers="Header-A: 1234; Header-B: 5678"
-//
-// Connect to a host different to the URL being requested:
-//   Get IP address of the www.google.com
-//   IP=`dig www.google.com +short | head -1`
-//   quic_client mail.google.com --host=${IP}
-//
-// Try to connect to a host which does not speak QUIC:
-//   Get IP address of the www.example.com
-//   IP=`dig www.example.com +short | head -1`
-//   quic_client http://www.example.com --host=${IP}
 
 #include <iostream>
 
@@ -77,11 +45,7 @@ using std::endl;
 // The IP or hostname the quic client will connect to.
 string FLAGS_host = "127.0.0.1";
 // The port to connect to.
-int32 FLAGS_port = 80;
-// If set, send a POST with this body.
-string FLAGS_body = "";
-// A semicolon separated list of key:value pairs to add to request headers.
-string FLAGS_headers = "";
+int32 FLAGS_port = 6121;
 // Set to true for a quieter output experience.
 bool FLAGS_quiet = false;
 // QUIC version to speak, e.g. 21. If not set, then all available versions are
@@ -90,9 +54,6 @@ int32 FLAGS_quic_version = -1;
 // If true, a version mismatch in the handshake is not considered a failure.
 // Useful for probing a server to determine if it speaks any version of QUIC.
 bool FLAGS_version_mismatch_ok = false;
-// If true, an HTTP response code of 3xx is considered to be a successful
-// response, otherwise a failure.
-bool FLAGS_redirect_is_success = true;
 // Enable mTCP-like N-stream simulation for congestion control.
 bool FLAGS_mtcp_enabled = false;
 // Enable FEC.
@@ -121,21 +82,17 @@ int main(int argc, char *argv[]) {
 
   if (line->HasSwitch("h") || line->HasSwitch("help") || urls.empty()) {
     const char* help_str =
-        "Usage: quic_client [options] <url>\n"
+        "Usage: quic_client [options] <file-to-download>\n"
         "\n"
-        "<url> with scheme must be provided (e.g. http://www.google.com)\n\n"
         "Options:\n"
         "-h, --help                  show this help message and exit\n"
         "--host=<host>               specify the IP address of the hostname to "
         "connect to\n"
         "--port=<port>               specify the port to connect to\n"
-        "--body=<body>               specify the body to post\n"
-        "--headers=<headers>         specify a semicolon separated list of "
-        "key:value pairs to add to request headers\n"
         "--mtcp                      enable mTCP like behavior for congestion control\n"
         "--fec                       enable FEC\n"
         "--emulated-connections=<N>  congestion control with N emulated connections (4,8,16,32,64)\n"
-        "--requests=<requests>       send multiple requests of the specified url\n"
+        "--requests=<requests>       send multiple requests of the specified file\n"
         "--disable-pacing            disable packet pacing\n"
         "--icwnd03                   set ICWND to 3\n"
         "--icwnd10                   set ICWND to 10\n"
@@ -143,9 +100,7 @@ int main(int argc, char *argv[]) {
         "--quiet                     specify for a quieter output experience\n"
         "--quic-version=<quic version> specify QUIC version to speak\n"
         "--version_mismatch_ok       if specified a version mismatch in the "
-        "handshake is not considered a failure\n"
-        "--redirect_is_success       if specified an HTTP response code of 3xx "
-        "is considered to be a successful response, otherwise a failure\n";
+        "handshake is not considered a failure\n";
     cout << help_str;
     exit(0);
   }
@@ -176,12 +131,6 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
-  if (line->HasSwitch("body")) {
-    FLAGS_body = line->GetSwitchValueASCII("body");
-  }
-  if (line->HasSwitch("headers")) {
-    FLAGS_headers = line->GetSwitchValueASCII("headers");
-  }
   if (line->HasSwitch("quiet")) {
     FLAGS_quiet = true;
   }
@@ -194,9 +143,6 @@ int main(int argc, char *argv[]) {
   }
   if (line->HasSwitch("version_mismatch_ok")) {
     FLAGS_version_mismatch_ok = true;
-  }
-  if (line->HasSwitch("redirect_is_success")) {
-    FLAGS_redirect_is_success = true;
   }
   if (line->HasSwitch("mtcp")) {
     if (FLAGS_emulated_connections == 0) {
@@ -222,11 +168,9 @@ int main(int argc, char *argv[]) {
   }
 
   VLOG(1) << "server host: " << FLAGS_host << " port: " << FLAGS_port
-          << " body: " << FLAGS_body << " headers: " << FLAGS_headers
           << " quiet: " << FLAGS_quiet
           << " quic-version: " << FLAGS_quic_version
-          << " version_mismatch_ok: " << FLAGS_version_mismatch_ok
-          << " redirect_is_success: " << FLAGS_redirect_is_success;
+          << " version_mismatch_ok: " << FLAGS_version_mismatch_ok;
 
   base::AtExitManager exit_manager;
 
@@ -259,7 +203,7 @@ int main(int argc, char *argv[]) {
   // Build the client, and try to connect.
   bool is_https = (FLAGS_port == 443);
   net::EpollServer epoll_server;
-  net::QuicServerId server_id(FLAGS_host/*url.host()*/, FLAGS_port, is_https,
+  net::QuicServerId server_id(FLAGS_host, FLAGS_port, is_https,
                               net::PRIVACY_MODE_DISABLED);
   net::QuicVersionVector versions = net::QuicSupportedVersions();
   if (FLAGS_quic_version != -1) {
@@ -329,14 +273,5 @@ int main(int argc, char *argv[]) {
 
   // Make sure to store the response, for later output.
   client.set_store_response(true);
-  if (FLAGS_quiet) {
-    client.set_store_response_body_and_headers(false);
-  }
-
   client.SendRequestsAndWaitForResponse(urls);
-
-  // Print request and response details.
-  if (!FLAGS_quiet) {
-    cout << client.latest_response_body();
-  }
 }

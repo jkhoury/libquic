@@ -23,6 +23,8 @@ using std::string;
 namespace net {
 namespace tools {
 
+std::string FileDownloaderServerStream::HomeDir = "./";
+
 FileDownloaderServerStream::FileDownloaderServerStream(QuicStreamId id,
                                            QuicServerSession* session)
     : ReliableQuicStream(id, session),

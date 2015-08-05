@@ -21,7 +21,7 @@
 #include "net/quic/quic_packet_creator.h"
 #include "net/tools/epoll_server/epoll_server.h"
 #include "net/tools/quic/quic_client_session.h"
-#include "net/tools/quic/quic_simple_client_stream.h"
+#include "net/tools/quic/file_downloader_client_stream.h"
 
 namespace net {
 
@@ -37,7 +37,7 @@ class QuicClientPeer;
 }  // namespace test
 
 class QuicClient : public EpollCallbackInterface,
-                   public QuicSimpleClientStream::Visitor {
+                   public FileDownloaderClientStream::Visitor {
  public:
   // A packet writer factory that always returns the same writer.
   class DummyPacketWriterFactory : public QuicConnection::PacketWriterFactory {
@@ -87,16 +87,12 @@ class QuicClient : public EpollCallbackInterface,
   // Disconnects from the QUIC server.
   void Disconnect();
 
-  void SendRequest(const std::string& request, bool fin);
+  bool SendRequest(const std::string& request, bool fin);
 
   // Sends a request simple GET for each URL in |args|, and then waits for
   // each to complete.
   void SendRequestsAndWaitForResponse(
       const std::vector<std::string>& url_list);
-
-  // Returns a newly created QuicSpdyClientStream, owned by the
-  // QuicClient.
-  QuicSimpleClientStream* CreateSimpleClientStream();
 
   // Wait for events until the stream with the given ID is closed.
   void WaitForStreamToClose(QuicStreamId id);
@@ -118,8 +114,8 @@ class QuicClient : public EpollCallbackInterface,
   void OnUnregistration(int fd, bool replaced) override {}
   void OnShutdown(EpollServer* eps, int fd) override {}
 
-  // QuicSimpleClientStream::Visitor
-  void OnClose(QuicSimpleClientStream* stream) override;
+  // FileDownloaderClientStream::Visitor
+  void OnClose(FileDownloaderClientStream* stream) override;
 
   QuicClientSession* session() { return session_.get(); }
 
@@ -173,7 +169,6 @@ class QuicClient : public EpollCallbackInterface,
   QuicConfig* config() { return &config_; }
 
   void set_store_response(bool val) { store_response_ = val; }
-  void set_store_response_body_and_headers(bool val) { store_response_body_and_headers_ = val; }
 
   size_t latest_response_code() const;
   const std::string& latest_response_headers() const;
@@ -266,14 +261,6 @@ class QuicClient : public EpollCallbackInterface,
 
   // If true, store the latest response code, headers, and body.
   bool store_response_;
-  // If false, don't store latest response headers and body.
-  bool store_response_body_and_headers_;
-  // HTTP response code from most recent response.
-  size_t latest_response_code_;
-  // HTTP headers from most recent response.
-  std::string latest_response_headers_;
-  // Body of most recent response.
-  std::string latest_response_body_;
 
   DISALLOW_COPY_AND_ASSIGN(QuicClient);
 };

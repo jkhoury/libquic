@@ -13,7 +13,7 @@
 #include "net/quic/quic_session.h"
 #include "net/quic/quic_crypto_client_stream.h"
 #include "net/quic/quic_protocol.h"
-#include "net/tools/quic/quic_simple_client_stream.h"
+#include "net/tools/quic/file_downloader_client_stream.h"
 
 namespace net {
 
@@ -32,7 +32,7 @@ class QuicClientSession : public QuicSession {
   ~QuicClientSession() override;
 
   // QuicSession methods:
-  QuicSimpleClientStream* CreateOutgoingDynamicStream() override;
+  FileDownloaderClientStream* CreateOutgoingDynamicStream() override;
   QuicCryptoClientStream* GetCryptoStream() override;
 #if 0
   // QuicClientSessionBase methods:
@@ -54,13 +54,13 @@ class QuicClientSession : public QuicSession {
 
  protected:
   // QuicSession methods:
-  QuicSimpleClientStream* CreateIncomingDynamicStream(QuicStreamId id) override;
+  FileDownloaderClientStream* CreateIncomingDynamicStream(QuicStreamId id) override;
 
   // Unlike CreateOutgoingDynamicStream, which applies a bunch of sanity checks,
   // this simply returns a new QuicSpdyClientStream. This may be used by
   // subclasses which want to use a subclass of QuicSpdyClientStream for streams
   // but wish to use the sanity checks in CreateOutgoingDynamicStream.
-  virtual QuicSimpleClientStream* CreateClientStream();
+  virtual FileDownloaderClientStream* CreateClientStream();
 
  private:
   scoped_ptr<QuicCryptoClientStream> crypto_stream_;
