@@ -47,6 +47,8 @@ using std::endl;
 string FLAGS_host = "127.0.0.1";
 // The port to connect to.
 int32 FLAGS_port = 6121;
+// The local port to connect from.
+int32 FLAGS_local_port = 0;
 // Set to true for a quieter output experience.
 bool FLAGS_quiet = false;
 // QUIC version to speak, e.g. 21. If not set, then all available versions are
@@ -90,6 +92,7 @@ int main(int argc, char *argv[]) {
         "--host=<host>               specify the IP address of the hostname to "
         "connect to\n"
         "--port=<port>               specify the port to connect to\n"
+        "--local-port=<port>         specify the local-port to connect from\n"
         "--mtcp                      enable mTCP like behavior for congestion control\n"
         "--fec                       enable FEC\n"
         "--emulated-connections=<N>  congestion control with N emulated connections (4,8,16,32,64)\n"
@@ -111,6 +114,12 @@ int main(int argc, char *argv[]) {
   if (line->HasSwitch("port")) {
     if (!base::StringToInt(line->GetSwitchValueASCII("port"), &FLAGS_port)) {
       std::cerr << "--port must be an integer\n";
+      return 1;
+    }
+  }
+  if (line->HasSwitch("local-port")) {
+    if (!base::StringToInt(line->GetSwitchValueASCII("local-port"), &FLAGS_local_port)) {
+      std::cerr << "--local-port must be an integer\n";
       return 1;
     }
   }
@@ -236,6 +245,8 @@ int main(int argc, char *argv[]) {
 
   net::tools::QuicClient client(net::IPEndPoint(ip_addr, FLAGS_port), server_id,
                                 versions, config, &epoll_server);
+  client.set_local_port(FLAGS_local_port);
+
   if (!client.Initialize()) {
     cerr << "Failed to initialize client." << endl;
     return 1;
