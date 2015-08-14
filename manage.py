@@ -29,7 +29,7 @@ def run(cmd):
     r = os.system(cmd)
     if r != 0:
         print("Script '{}' failed with error code {}. Exiting".format(cmd, r))
-        exit(r)
+#        exit(r)
 
 
 def force_run(cmd):
