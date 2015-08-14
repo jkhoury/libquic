@@ -658,7 +658,7 @@ bool QuicSentPacketManager::MaybeRetransmitTailLossProbe() {
 #if defined(NDEBUG)
   base::debug::DumpWithoutCrashing();
 #else
-  DLOG(FATAL)
+  DLOG(ERROR)
     << "No retransmittable packets, so RetransmitOldestPacket failed.";
 #endif
   return false;

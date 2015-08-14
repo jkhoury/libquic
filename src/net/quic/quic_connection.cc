@@ -17,7 +17,6 @@
 #include "base/format_macros.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/profiler/scoped_tracker.h"
 #include "base/stl_util.h"
 #include "base/strings/stringprintf.h"
 #include "net/base/net_errors.h"
@@ -1338,10 +1337,12 @@ void QuicConnection::ProcessUdpPacket(const IPEndPoint& self_address,
   if (!connected_) {
     return;
   }
+#if 0
   // TODO(rtenneti): Remove ScopedTracker below once crbug.com/462789 is fixed.
   tracked_objects::ScopedTracker tracking_profile(
       FROM_HERE_WITH_EXPLICIT_FUNCTION(
           "462789 QuicConnection::ProcessUdpPacket"));
+#endif
   if (debug_visitor_ != nullptr) {
     debug_visitor_->OnPacketReceived(self_address, peer_address, packet);
   }
