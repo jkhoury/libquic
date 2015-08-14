@@ -65,6 +65,9 @@ QuicPacketGenerator::~QuicPacketGenerator() {
       case ACK_FRAME:
         delete frame.ack_frame;
         break;
+      case MTU_DISCOVERY_FRAME:
+        delete frame.mtu_discovery_frame;
+        break;
       case RST_STREAM_FRAME:
         delete frame.rst_stream_frame;
         break;
@@ -228,6 +231,39 @@ QuicConsumedData QuicPacketGenerator::ConsumeData(
 
   DCHECK(InBatchMode() || !packet_creator_.HasPendingFrames());
   return QuicConsumedData(total_bytes_consumed, fin_consumed);
+}
+
+void QuicPacketGenerator::GenerateMtuDiscoveryPacket(
+    QuicByteCount target_mtu,
+    QuicAckNotifier::DelegateInterface* delegate) {
+  // MTU discovery frames must be sent by themselves.
+  DCHECK(!InBatchMode() && !packet_creator_.HasPendingFrames());
+
+  // If an ack notifier delegate is provided, register it.
+  if (delegate) {
+    QuicAckNotifier* ack_notifier = new QuicAckNotifier(delegate);
+    // The notifier manager will take the ownership of the notifier after the
+    // packet is sent.
+    ack_notifiers_.push_back(ack_notifier);
+  }
+
+  const QuicByteCount current_mtu = GetMaxPacketLength();
+
+  // The MTU discovery frame is allocated on the stack, since it is going to be
+  // serialized within this function.
+  QuicMtuDiscoveryFrame mtu_discovery_frame;
+  QuicFrame frame(&mtu_discovery_frame);
+
+  // Send the probe packet with the new length.
+  SetMaxPacketLength(target_mtu, /*force=*/true);
+  const bool success = AddFrame(frame, nullptr, /*needs_padding=*/true);
+  SerializeAndSendPacket();
+  // The only reason AddFrame can fail is that the packet is too full to fit in
+  // a ping.  This is not possible for any sane MTU.
+  DCHECK(success);
+
+  // Reset the packet length back.
+  SetMaxPacketLength(current_mtu, /*force=*/true);
 }
 
 bool QuicPacketGenerator::CanSendWithNextPendingFrameAddition() const {
@@ -421,7 +457,12 @@ void QuicPacketGenerator::SerializeAndSendPacket() {
   char buffer[kMaxPacketSize];
   SerializedPacket serialized_packet =
       packet_creator_.SerializePacket(buffer, kMaxPacketSize);
-  DCHECK(serialized_packet.packet);
+  if (serialized_packet.packet == nullptr) {
+    LOG(DFATAL) << "Failed to SerializePacket. fec_policy:" << fec_send_policy_
+                << " should_fec_protect_:" << should_fec_protect_;
+    delegate_->CloseConnection(QUIC_FAILED_TO_SERIALIZE_PACKET, false);
+    return;
+  }
 
   // There may be AckNotifiers interested in this packet.
   serialized_packet.notifiers.swap(ack_notifiers_);

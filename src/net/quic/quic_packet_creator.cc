@@ -463,10 +463,14 @@ SerializedPacket QuicPacketCreator::SerializePacket(
     packet.reset(framer_->BuildDataPacket(header, queued_frames_,
                                           large_buffer.get(), packet_size_));
   }
+  if (packet == nullptr) {
+    LOG(DFATAL) << "Failed to serialize " << queued_frames_.size()
+                << " frames.";
+    return NoPacket();
+  }
+
   OnBuiltFecProtectedPayload(header, packet->FecProtectedData());
 
-  LOG_IF(DFATAL, packet == nullptr) << "Failed to serialize "
-                                    << queued_frames_.size() << " frames.";
   // Because of possible truncation, we can't be confident that our
   // packet size calculation worked correctly.
   if (!possibly_truncated_by_length) {
@@ -480,6 +484,14 @@ SerializedPacket QuicPacketCreator::SerializePacket(
   if (encrypted == nullptr) {
     LOG(DFATAL) << "Failed to encrypt packet number " << sequence_number_;
     return NoPacket();
+  }
+
+  // Update |needs_padding_| flag of |queued_retransmittable_frames_| here, and
+  // not in AddFrame, because when the first padded frame is added to the queue,
+  // it might not be retransmittable, and hence the flag would end up being not
+  // set.
+  if (queued_retransmittable_frames_.get() != nullptr) {
+    queued_retransmittable_frames_->set_needs_padding(needs_padding_);
   }
 
   packet_size_ = 0;
@@ -566,6 +578,7 @@ bool QuicPacketCreator::ShouldRetransmit(const QuicFrame& frame) {
     case ACK_FRAME:
     case PADDING_FRAME:
     case STOP_WAITING_FRAME:
+    case MTU_DISCOVERY_FRAME:
       return false;
     default:
       return true;
@@ -601,7 +614,6 @@ bool QuicPacketCreator::AddFrame(const QuicFrame& frame,
 
   if (needs_padding) {
     needs_padding_ = true;
-    queued_retransmittable_frames_->set_needs_padding(true);
   }
 
   return true;
