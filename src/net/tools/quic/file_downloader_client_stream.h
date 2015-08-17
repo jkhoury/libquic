@@ -49,7 +49,7 @@ class FileDownloaderClientStream : public ReliableQuicStream /*ReliableQuicStrea
   // data for us.
   // ReliableQuicStream implementation
   void OnClose() override;
-  uint32 ProcessRawData(const char* data, uint32 data_len) override;
+  void OnDataAvailable() override;
 
   QuicPriority EffectivePriority() const override { return kDefaultPriority; }
 

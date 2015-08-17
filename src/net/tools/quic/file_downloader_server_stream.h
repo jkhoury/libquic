@@ -25,9 +25,8 @@ class FileDownloaderServerStream : public ReliableQuicStream {
 
   // ReliableQuicStream implementation called by the session when there's
   // data for us.
-  uint32 ProcessRawData(const char* data, uint32 data_len) override;
+  void OnDataAvailable() override;
   void OnCanWrite() override;
-  void OnFinRead() override;
   QuicPriority EffectivePriority() const override { return kDefaultPriority; }
 
   static void SetHomeDir(const std::string& home_dir) {

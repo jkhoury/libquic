@@ -38,16 +38,28 @@ FileDownloaderServerStream::~FileDownloaderServerStream() {
   }
 }
 
-uint32 FileDownloaderServerStream::ProcessRawData(const char* data, uint32 data_len) {
-  request_.append(data, data_len);
-  DVLOG(1) << "################ Processed " << data_len << " bytes for stream " << id();
-  DVLOG(1) << request_;
-  return data_len;
-}
+void FileDownloaderServerStream::OnDataAvailable() {
+  while (sequencer()->HasBytesToRead()) {
+    struct iovec iov;
+    if (sequencer()->GetReadableRegions(&iov, 1) == 0) {
+      // No more data to read.
+      break;
+    }
+    DVLOG(1) << "### Processed " << iov.iov_len << " bytes for stream " << id();
+    DVLOG(1) << static_cast<char*>(iov.iov_base);
+    request_.append(static_cast<char*>(iov.iov_base), iov.iov_len);
 
-void FileDownloaderServerStream::OnFinRead() {
-  DVLOG(1) << "################ FIN received for stream ################" << id();
-  ReliableQuicStream::OnFinRead();
+    sequencer()->MarkConsumed(iov.iov_len);
+  }
+  if (!sequencer()->IsClosed()) {
+    sequencer()->SetUnblocked();
+    return;
+  }
+
+  // If the sequencer is closed, then everything has been consumed.
+  DVLOG(1) << "@@@ Client finished writting for stream " << id();
+  OnFinRead();
+
   if (write_side_closed() || fin_buffered()) {
     return;
   }

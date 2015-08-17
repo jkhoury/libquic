@@ -40,16 +40,33 @@ void FileDownloaderClientStream::OnStreamFrame(const QuicStreamFrame& frame) {
   ReliableQuicStream::OnStreamFrame(frame);
 }
 
-uint32 FileDownloaderClientStream::ProcessRawData(const char* data, uint32 data_len) {
+void FileDownloaderClientStream::OnDataAvailable() {
   DCHECK(fd_ != -1);
-  ssize_t consumed_bytes = write(fd_, data, data_len);
-  if (consumed_bytes != static_cast<ssize_t>(data_len)) {
-    LOG(ERROR) << "*** Client processed " << consumed_bytes << " bytes "
-                  "out of expected " << data_len << " bytes";
-  } else {
-    DVLOG(1) << "*** Client processed " << data_len << " bytes for stream " << id();
+
+  while (sequencer()->HasBytesToRead()) {
+    struct iovec iov;
+    if (sequencer()->GetReadableRegions(&iov, 1) == 0) {
+      // No more data to read.
+      break;
+    }
+
+    ssize_t saved_bytes = write(fd_, static_cast<char*>(iov.iov_base),
+                                iov.iov_len);
+    if (saved_bytes != static_cast<ssize_t>(iov.iov_len)) {
+      LOG(ERROR) << "*** Client processed " << saved_bytes << " bytes "
+                    "out of expected " << iov.iov_len << " bytes";
+    } else {
+      DVLOG(1) << "*** Client processed " << iov.iov_len << " bytes for stream " << id();
+    }
+
+    sequencer()->MarkConsumed(iov.iov_len);
   }
-  return data_len;
+
+  if (sequencer()->IsClosed()) {
+    OnFinRead();
+  } else {
+    sequencer()->SetUnblocked();
+  }
 }
 
 bool FileDownloaderClientStream::SendRequest(const std::string& request, bool fin) {
