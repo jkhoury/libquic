@@ -175,13 +175,6 @@ void QuicCryptoClientStream::HandleServerConfigUpdateMessage(
   DoHandshakeLoop(nullptr);
 }
 
-// kMaxClientHellos is the maximum number of times that we'll send a client
-// hello. The value 3 accounts for:
-//   * One failure due to an incorrect or missing source-address token.
-//   * One failure due the server's certificate chain being unavailible and the
-//     server being unwilling to send it without a valid source-address token.
-static const int kMaxClientHellos = 3;
-
 void QuicCryptoClientStream::DoHandshakeLoop(
     const CryptoHandshakeMessage* in) {
   QuicCryptoClientConfig::CachedState* cached =
@@ -424,14 +417,9 @@ QuicAsyncStatus QuicCryptoClientStream::DoVerifyProof(
   verify_ok_ = false;
 
   QuicAsyncStatus status = verifier->VerifyProof(
-      server_id_.host(),
-      cached->server_config(),
-      cached->certs(),
-      cached->signature(),
-      verify_context_.get(),
-      &verify_error_details_,
-      &verify_details_,
-      proof_verify_callback);
+      server_id_.host(), cached->server_config(), cached->certs(),
+      cached->signature(), verify_context_.get(), &verify_error_details_,
+      &verify_details_, proof_verify_callback);
 
   switch (status) {
     case QUIC_PENDING:

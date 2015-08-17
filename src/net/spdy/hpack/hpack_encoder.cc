@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "net/spdy/hpack_encoder.h"
+#include "net/spdy/hpack/hpack_encoder.h"
 
 #include <algorithm>
 
 #include "base/logging.h"
-#include "net/spdy/hpack_header_table.h"
-#include "net/spdy/hpack_huffman_table.h"
-#include "net/spdy/hpack_output_stream.h"
+#include "net/spdy/hpack/hpack_header_table.h"
+#include "net/spdy/hpack/hpack_huffman_table.h"
+#include "net/spdy/hpack/hpack_output_stream.h"
 
 namespace net {
 
@@ -25,54 +25,51 @@ HpackEncoder::HpackEncoder(const HpackHuffmanTable& table)
 
 HpackEncoder::~HpackEncoder() {}
 
-bool HpackEncoder::EncodeHeaderSet(const std::map<string, string>& header_set,
+bool HpackEncoder::EncodeHeaderSet(const SpdyHeaderBlock& header_set,
                                    string* output) {
   // Separate header set into pseudo-headers and regular headers.
   Representations pseudo_headers;
   Representations regular_headers;
-  for (std::map<string, string>::const_iterator it = header_set.begin();
-       it != header_set.end(); ++it) {
-    if (it->first == "cookie") {
+  for (const auto& header : header_set) {
+    if (header.first == "cookie") {
       // Note that there can only be one "cookie" header, because header_set is
       // a map.
-      CookieToCrumbs(*it, &regular_headers);
-    } else if (it->first[0] == kPseudoHeaderPrefix) {
-      DecomposeRepresentation(*it, &pseudo_headers);
+      CookieToCrumbs(header, &regular_headers);
+    } else if (header.first[0] == kPseudoHeaderPrefix) {
+      DecomposeRepresentation(header, &pseudo_headers);
     } else {
-      DecomposeRepresentation(*it, &regular_headers);
+      DecomposeRepresentation(header, &regular_headers);
     }
   }
 
   // Encode pseudo-headers.
-  for (Representations::const_iterator it = pseudo_headers.begin();
-       it != pseudo_headers.end(); ++it) {
+  for (const auto& header : pseudo_headers) {
     const HpackEntry* entry =
-        header_table_.GetByNameAndValue(it->first, it->second);
+        header_table_.GetByNameAndValue(header.first, header.second);
     if (entry != NULL) {
       EmitIndex(entry);
     } else {
-      if (it->first == ":authority") {
+      if (header.first == ":authority") {
         // :authority is always present and rarely changes, and has moderate
         // length, therefore it makes a lot of sense to index (insert in the
         // header table).
-        EmitIndexedLiteral(*it);
+        EmitIndexedLiteral(header);
       } else {
         // Most common pseudo-header fields are represented in the static table,
         // while uncommon ones are small, so do not index them.
-        EmitNonIndexedLiteral(*it);
+        EmitNonIndexedLiteral(header);
       }
     }
   }
 
   // Encode regular headers.
-  for (Representations::const_iterator it = regular_headers.begin();
-       it != regular_headers.end(); ++it) {
+  for (const auto& header : regular_headers) {
     const HpackEntry* entry =
-        header_table_.GetByNameAndValue(it->first, it->second);
+        header_table_.GetByNameAndValue(header.first, header.second);
     if (entry != NULL) {
       EmitIndex(entry);
     } else {
-      EmitIndexedLiteral(*it);
+      EmitIndexedLiteral(header);
     }
   }
 
@@ -81,14 +78,12 @@ bool HpackEncoder::EncodeHeaderSet(const std::map<string, string>& header_set,
 }
 
 bool HpackEncoder::EncodeHeaderSetWithoutCompression(
-    const std::map<string, string>& header_set,
+    const SpdyHeaderBlock& header_set,
     string* output) {
-
   allow_huffman_compression_ = false;
-  for (std::map<string, string>::const_iterator it = header_set.begin();
-       it != header_set.end(); ++it) {
+  for (const auto& header : header_set) {
     // Note that cookies are not crumbled in this case.
-    EmitNonIndexedLiteral(*it);
+    EmitNonIndexedLiteral(header);
   }
   allow_huffman_compression_ = true;
   output_stream_.TakeString(output);
@@ -106,8 +101,7 @@ void HpackEncoder::EmitIndexedLiteral(const Representation& representation) {
   header_table_.TryAddEntry(representation.first, representation.second);
 }
 
-void HpackEncoder::EmitNonIndexedLiteral(
-    const Representation& representation) {
+void HpackEncoder::EmitNonIndexedLiteral(const Representation& representation) {
   output_stream_.AppendPrefix(kLiteralNoIndexOpcode);
   output_stream_.AppendUint32(0);
   EmitString(representation.first);
@@ -126,8 +120,9 @@ void HpackEncoder::EmitLiteral(const Representation& representation) {
 }
 
 void HpackEncoder::EmitString(StringPiece str) {
-  size_t encoded_size = (!allow_huffman_compression_ ? str.size()
-                         : huffman_table_.EncodedSize(str));
+  size_t encoded_size =
+      (!allow_huffman_compression_ ? str.size()
+                                   : huffman_table_.EncodedSize(str));
   if (encoded_size < str.size()) {
     output_stream_.AppendPrefix(kStringLiteralHuffmanEncoded);
     output_stream_.AppendUint32(encoded_size);
@@ -160,31 +155,34 @@ void HpackEncoder::UpdateCharacterCounts(base::StringPiece str) {
 // static
 void HpackEncoder::CookieToCrumbs(const Representation& cookie,
                                   Representations* out) {
-  size_t prior_size = out->size();
-
   // See Section 8.1.2.5. "Compressing the Cookie Header Field" in the HTTP/2
   // specification at https://tools.ietf.org/html/draft-ietf-httpbis-http2-14.
   // Cookie values are split into individually-encoded HPACK representations.
+  StringPiece cookie_value = cookie.second;
+  // Consume leading and trailing whitespace if present.
+  StringPiece::size_type first = cookie_value.find_first_not_of(" \t");
+  StringPiece::size_type last = cookie_value.find_last_not_of(" \t");
+  if (first == StringPiece::npos) {
+    cookie_value.clear();
+  } else {
+    cookie_value = cookie_value.substr(first, (last - first) + 1);
+  }
   for (size_t pos = 0;;) {
-    size_t end = cookie.second.find(";", pos);
+    size_t end = cookie_value.find(";", pos);
 
     if (end == StringPiece::npos) {
-      out->push_back(std::make_pair(cookie.first, cookie.second.substr(pos)));
+      out->push_back(std::make_pair(cookie.first, cookie_value.substr(pos)));
       break;
     }
     out->push_back(
-        std::make_pair(cookie.first, cookie.second.substr(pos, end - pos)));
+        std::make_pair(cookie.first, cookie_value.substr(pos, end - pos)));
 
     // Consume next space if present.
     pos = end + 1;
-    if (pos != cookie.second.size() && cookie.second[pos] == ' ') {
+    if (pos != cookie_value.size() && cookie_value[pos] == ' ') {
       pos++;
     }
   }
-  // Sort crumbs and remove duplicates.
-  std::sort(out->begin() + prior_size, out->end());
-  out->erase(std::unique(out->begin() + prior_size, out->end()),
-             out->end());
 }
 
 // static

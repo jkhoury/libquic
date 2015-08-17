@@ -718,11 +718,13 @@ class NSSInitSingleton {
   }
 #endif  // defined(USE_NSS_CERTS)
 
+#if !defined(USE_OPENSSL)
   // This method is used to force NSS to be initialized without a DB.
   // Call this method before NSSInitSingleton() is constructed.
   static void ForceNoDBInit() {
     force_nodb_init_ = true;
   }
+#endif
 
  private:
   friend struct base::DefaultLazyInstanceTraits<NSSInitSingleton>;
@@ -758,7 +760,13 @@ class NSSInitSingleton {
     }
 
     SECStatus status = SECFailure;
-    bool nodb_init = force_nodb_init_;
+    bool nodb_init = false;
+
+#if !defined(USE_OPENSSL)
+    // ForceNoDBInit was called.
+    if (force_nodb_init_)
+      nodb_init = true;
+#endif
 
 #if !defined(USE_NSS_CERTS)
     // Use the system certificate store, so initialize NSS without database.
@@ -919,8 +927,10 @@ class NSSInitSingleton {
 #endif
   }
 
+#if !defined(USE_OPENSSL)
   // If this is set to true NSS is forced to be initialized without a DB.
   static bool force_nodb_init_;
+#endif
 
   bool tpm_token_enabled_for_nss_;
   bool initializing_tpm_token_;
@@ -945,8 +955,10 @@ class NSSInitSingleton {
 #endif
 };
 
+#if !defined(USE_OPENSSL)
 // static
 bool NSSInitSingleton::force_nodb_init_ = false;
+#endif
 
 base::LazyInstance<NSSInitSingleton>::Leaky
     g_nss_singleton = LAZY_INSTANCE_INITIALIZER;
@@ -981,6 +993,7 @@ void EnsureNSPRInit() {
   g_nspr_singleton.Get();
 }
 
+#if !defined(USE_OPENSSL)
 void InitNSSSafely() {
   // We might fork, but we haven't loaded any security modules.
   DisableNSSForkCheck();
@@ -991,6 +1004,7 @@ void InitNSSSafely() {
   // Initialize NSS.
   EnsureNSSInit();
 }
+#endif  // !defined(USE_OPENSSL)
 
 void EnsureNSSInit() {
   // Initializing SSL causes us to do blocking IO.
@@ -1001,6 +1015,8 @@ void EnsureNSSInit() {
 #endif
   g_nss_singleton.Get();
 }
+
+#if !defined(USE_OPENSSL)
 
 void ForceNSSNoDBInit() {
   NSSInitSingleton::ForceNoDBInit();
@@ -1068,6 +1084,8 @@ void LoadNSSLibraries() {
 #endif  // defined(USE_NSS_CERTS)
 #endif
 }
+
+#endif  // !defined(USE_OPENSSL)
 
 bool CheckNSSVersion(const char* version) {
   return !!NSS_VersionCheck(version);

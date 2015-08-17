@@ -13,12 +13,12 @@
 #include "base/macros.h"
 #include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
-#include "net/spdy/hpack_header_table.h"
-#include "net/spdy/hpack_input_stream.h"
+#include "net/spdy/hpack/hpack_header_table.h"
+#include "net/spdy/hpack/hpack_input_stream.h"
 #include "net/spdy/spdy_protocol.h"
 
 // An HpackDecoder decodes header sets as outlined in
-// http://tools.ietf.org/html/draft-ietf-httpbis-header-compression-08
+// http://tools.ietf.org/html/rfc7541.
 
 namespace net {
 
@@ -51,35 +51,39 @@ class NET_EXPORT_PRIVATE HpackDecoder {
                                      size_t headers_data_length);
 
   // Called after a headers block has been completely delivered via
-  // HandleControlFrameHeadersData(). Returns false if an error occurred.
-  // TODO(jgraettinger): A future version of this method will simply deliver
-  // the Cookie header (which has been incrementally reconstructed) and notify
-  // the visitor that the block is finished. For now, this method decodes the
-  // complete buffered block, and stores results to |decoded_block_|.
-  bool HandleControlFrameHeadersComplete(SpdyStreamId stream_id);
+  // HandleControlFrameHeadersData(). Returns false if an error
+  // occurred.  |compressed_len| if non-null will be set to the size
+  // of the encoded buffered block that was accumulated in
+  // HandleControlFrameHeadersData(), to support subsequent
+  // calculation of compression percentage.  TODO(jgraettinger): A
+  // future version of this method will simply deliver the Cookie
+  // header (which has been incrementally reconstructed) and notify
+  // the visitor that the block is finished. For now, this method
+  // decodes the complete buffered block, and stores results to
+  // |decoded_block_|.
+  bool HandleControlFrameHeadersComplete(SpdyStreamId stream_id,
+                                         size_t* compressed_len);
 
   // Accessor for the most recently decoded headers block. Valid until the next
   // call to HandleControlFrameHeadersData().
   // TODO(jgraettinger): This was added to facilitate re-encoding the block in
   // SPDY3 format for delivery to the SpdyFramer visitor, and will be removed
   // with the migration to SpdyHeadersHandlerInterface.
-  const std::map<std::string, std::string>& decoded_block() {
-    return decoded_block_;
-  }
+  const SpdyHeaderBlock& decoded_block() { return decoded_block_; }
 
  private:
   // Adds the header representation to |decoded_block_|, applying the
-  // following rules, as per sections 8.1.3.3 & 8.1.3.4 of the HTTP2 draft
-  // specification:
+  // following rules:
   //  - Multiple values of the Cookie header are joined, delmited by '; '.
-  //    This reconstruction is required to properly handle Cookie crumbling.
+  //    This reconstruction is required to properly handle Cookie crumbling
+  //    (as per section 8.1.2.5 in RFC 7540).
   //  - Multiple values of other headers are joined and delimited by '\0'.
   //    Note that this may be too accomodating, as the sender's HTTP2 layer
   //    should have already joined and delimited these values.
   //
   // Returns false if a pseudo-header field follows a regular header one, which
-  // MUST be treated as malformed, as per sections 8.1.2.1. of the HTTP2 draft
-  // specification.
+  // MUST be treated as malformed, as per sections 8.1.2.3. of the HTTP2
+  // specification (RFC 7540).
   //
   // TODO(jgraettinger): This method will eventually emit to the
   // SpdyHeadersHandlerInterface visitor.
@@ -96,7 +100,7 @@ class NET_EXPORT_PRIVATE HpackDecoder {
   // processed headers block. Both will be removed with the switch to
   // SpdyHeadersHandlerInterface.
   std::string headers_block_buffer_;
-  std::map<std::string, std::string> decoded_block_;
+  SpdyHeaderBlock decoded_block_;
 
   // Flag to keep track of having seen a regular header field.
   bool regular_header_seen_;

@@ -11,8 +11,20 @@
 #include <string>
 #include <vector>
 
+#include "build/build_config.h"
+
+// TODO(rtenneti): Temporary while investigating crbug.com/473893.
+//                 Note base::Debug::StackTrace() is not supported in NACL
+//                 builds so conditionally disabled it there.
+#ifndef OS_NACL
+#define TEMP_INSTRUMENTATION_473893
+#endif
+
 #include "base/compiler_specific.h"
 #include "base/containers/hash_tables.h"
+#ifdef TEMP_INSTRUMENTATION_473893
+#include "base/debug/stack_trace.h"
+#endif
 #include "base/memory/scoped_ptr.h"
 #include "base/strings/string_piece.h"
 #include "net/base/ip_endpoint.h"
@@ -60,12 +72,11 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   virtual void Initialize();
 
   // QuicConnectionVisitorInterface methods:
-  void OnStreamFrames(const std::vector<QuicStreamFrame>& frames) override;
+  void OnStreamFrame(const QuicStreamFrame& frame) override;
   void OnRstStream(const QuicRstStreamFrame& frame) override;
   void OnGoAway(const QuicGoAwayFrame& frame) override;
-  void OnWindowUpdateFrames(
-      const std::vector<QuicWindowUpdateFrame>& frames) override;
-  void OnBlockedFrames(const std::vector<QuicBlockedFrame>& frames) override;
+  void OnWindowUpdateFrame(const QuicWindowUpdateFrame& frame) override;
+  void OnBlockedFrame(const QuicBlockedFrame& frame) override;
   void OnConnectionClosed(QuicErrorCode error, bool from_peer) override;
   void OnWriteBlocked() override {}
   void OnSuccessfulVersionNegotiation(const QuicVersion& version) override;
@@ -142,8 +153,16 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   // not yet been created.
   bool IsClosedStream(QuicStreamId id);
 
-  QuicConnection* connection() { return connection_.get(); }
-  const QuicConnection* connection() const { return connection_.get(); }
+  QuicConnection* connection() {
+    // TODO(rtenneti): Temporary while investigating crbug.com/473893
+    CrashIfInvalid();
+    return connection_.get();
+  }
+  const QuicConnection* connection() const {
+    // TODO(rtenneti): Temporary while investigating crbug.com/473893
+    CrashIfInvalid();
+    return connection_.get();
+  }
   size_t num_active_requests() const { return dynamic_stream_map_.size(); }
   const IPEndPoint& peer_address() const {
     return connection_->peer_address();
@@ -157,7 +176,11 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   // streams.
   virtual size_t GetNumOpenStreams() const;
 
-  void MarkWriteBlocked(QuicStreamId id, QuicPriority priority);
+  // Add the stream to the session's write-blocked list because it is blocked by
+  // connection-level flow control but not by its own stream-level flow control.
+  // The stream will be given a chance to write when a connection-level
+  // WINDOW_UPDATE arrives.
+  void MarkConnectionLevelWriteBlocked(QuicStreamId id, QuicPriority priority);
 
   // Returns true if the session has data to be sent, either queued in the
   // connection, or in a write-blocked stream.
@@ -185,6 +208,9 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   size_t get_max_open_streams() const { return max_open_streams_; }
 
   ReliableQuicStream* GetStream(const QuicStreamId stream_id);
+
+  // Mark a stream as draining.
+  void StreamDraining(QuicStreamId id);
 
  protected:
   typedef base::hash_map<QuicStreamId, ReliableQuicStream*> StreamMap;
@@ -238,6 +264,14 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   friend class test::QuicSessionPeer;
   friend class VisitorShim;
 
+#ifdef TEMP_INSTRUMENTATION_473893
+  // TODO(rtenneti): Temporary while investigating crbug.com/473893
+  enum Liveness {
+    ALIVE = 0xCA11AB13,
+    DEAD = 0xDEADBEEF,
+  };
+#endif
+
   // Performs the work required to close |stream_id|.  If |locally_reset|
   // then the stream has been reset by this endpoint, not by the peer.
   void CloseStreamInner(QuicStreamId stream_id, bool locally_reset);
@@ -253,13 +287,16 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   // control window in a negotiated config. Closes the connection if invalid.
   void OnNewStreamFlowControlWindow(QuicStreamOffset new_window);
 
-  // Called in OnConfigNegotiated when we receive a new session level flow
+  // Called in OnConfigNegotiated when we receive a new connection level flow
   // control window in a negotiated config. Closes the connection if invalid.
   void OnNewSessionFlowControlWindow(QuicStreamOffset new_window);
 
   // Called in OnConfigNegotiated when auto-tuning is enabled for flow
   // control receive windows.
   void EnableAutoTuneReceiveWindow();
+
+  // TODO(rtenneti): Temporary while investigating crbug.com/473893
+  void CrashIfInvalid() const;
 
   // Keep track of highest received byte offset of locally closed streams, while
   // waiting for a definitive final highest offset from the peer.
@@ -291,6 +328,11 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   // of a stream id larger than the next expected stream id.
   base::hash_set<QuicStreamId> implicitly_created_streams_;
 
+  // Set of stream ids that are "draining" -- a FIN has been sent and received,
+  // but the stream object still exists because not all the received data has
+  // been consumed.
+  base::hash_set<QuicStreamId> draining_streams_;
+
   // A list of streams which need to write more data.
   QuicWriteBlockedList write_blocked_streams_;
 
@@ -299,7 +341,7 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
   // The latched error with which the connection was closed.
   QuicErrorCode error_;
 
-  // Used for session level flow control.
+  // Used for connection-level flow control.
   QuicFlowController flow_controller_;
 
   // Whether a GoAway has been received.
@@ -309,6 +351,12 @@ class NET_EXPORT_PRIVATE QuicSession : public QuicConnectionVisitorInterface {
 
   // Indicate if there is pending data for the crypto stream.
   bool has_pending_handshake_;
+
+#ifdef TEMP_INSTRUMENTATION_473893
+  // TODO(rtenneti): Temporary while investigating crbug.com/473893
+  Liveness liveness_ = ALIVE;
+  base::debug::StackTrace stack_trace_;
+#endif
 
   DISALLOW_COPY_AND_ASSIGN(QuicSession);
 };

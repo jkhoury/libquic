@@ -50,7 +50,7 @@ typedef std::map<QuicTag, std::string> QuicTagValueMap;
 // QuicPriority is uint32. Use SpdyPriority when we change the QUIC_VERSION.
 typedef uint32 QuicPriority;
 
-// Default and initial maximum size in bytes of a QUIC packet.
+// Default initial maximum size in bytes of a QUIC packet.
 const QuicByteCount kDefaultMaxPacketSize = 1350;
 // Default initial maximum size in bytes of a QUIC packet for servers.
 const QuicByteCount kDefaultServerMaxPacketSize = 1000;
@@ -74,8 +74,11 @@ const uint32 kMinimumFlowControlSendWindow = 16 * 1024;  // 16 KB
 // Minimum size of the CWND, in packets, when doing bandwidth resumption.
 const QuicPacketCount kMinCongestionWindowForBandwidthResumption = 10;
 
-// Maximum size of the CWND, in packets, for TCP congestion control algorithms.
-const QuicPacketCount kMaxTcpCongestionWindow = 200;
+// Maximum size of the CWND, in packets.
+const QuicPacketCount kMaxCongestionWindow = 200;
+
+// Maximum number of tracked packets.
+const QuicPacketCount kMaxTrackedPackets = 5000;
 
 // Default size of the socket receive buffer in bytes.
 const QuicByteCount kDefaultSocketReceiveBuffer = 256 * 1024;
@@ -86,6 +89,10 @@ const QuicByteCount kMinSocketReceiveBuffer = 16 * 1024;
 // Fraction of the receive buffer that can be used for encrypted bytes.
 // Allows a 5% overhead for IP and UDP framing, as well as ack only packets.
 static const float kUsableRecieveBufferFraction = 0.95f;
+// Fraction of the receive buffer that can be used, based on conservative
+// estimates and testing on Linux.
+// An alternative to kUsableRecieveBufferFraction.
+static const float kConservativeReceiveBufferFraction = 0.6f;
 
 // Don't allow a client to suggest an RTT shorter than 10ms.
 const uint32 kMinInitialRoundTripTimeUs = 10 * kNumMicrosPerMilli;
@@ -110,9 +117,6 @@ const bool kIncludeVersion = true;
 
 // Index of the first byte in a QUIC packet which is used in hash calculation.
 const size_t kStartOfHashData = 0;
-
-// Limit on the delta between stream IDs.
-const QuicStreamId kMaxStreamIdDelta = 200;
 
 // Reserved ID for the crypto stream.
 const QuicStreamId kCryptoStreamId = 1;
@@ -237,6 +241,8 @@ enum QuicFrameType {
   // the wire and their values do not need to be stable.
   STREAM_FRAME,
   ACK_FRAME,
+  // The path MTU discovery frame is encoded as a PING frame on the wire.
+  MTU_DISCOVERY_FRAME,
   NUM_FRAME_TYPES
 };
 
@@ -537,6 +543,12 @@ enum QuicErrorCode {
   QUIC_CONNECTION_CANCELLED = 70,
   // Disabled QUIC because of high packet loss rate.
   QUIC_BAD_PACKET_LOSS_RATE = 71,
+  // Disabled QUIC because of too many PUBLIC_RESETs post handshake.
+  QUIC_PUBLIC_RESETS_POST_HANDSHAKE = 73,
+  // Disabled QUIC because of too many timeouts with streams open.
+  QUIC_TIMEOUTS_WITH_OPEN_STREAMS = 74,
+  // Closed because we failed to serialize a packet.
+  QUIC_FAILED_TO_SERIALIZE_PACKET = 75,
 
   // Crypto errors.
 
@@ -596,7 +608,7 @@ enum QuicErrorCode {
   QUIC_VERSION_NEGOTIATION_MISMATCH = 55,
 
   // No error. Used as bound while iterating.
-  QUIC_LAST_ERROR = 73,
+  QUIC_LAST_ERROR = 76,
 };
 
 struct NET_EXPORT_PRIVATE QuicPacketPublicHeader {
@@ -668,6 +680,10 @@ struct NET_EXPORT_PRIVATE QuicPaddingFrame {
 // and ACK'd just like other normal frames.
 struct NET_EXPORT_PRIVATE QuicPingFrame {
 };
+
+// A path MTU discovery frame contains no payload and is serialized as a ping
+// frame.
+struct NET_EXPORT_PRIVATE QuicMtuDiscoveryFrame {};
 
 struct NET_EXPORT_PRIVATE QuicStreamFrame {
   QuicStreamFrame();
@@ -877,6 +893,7 @@ struct NET_EXPORT_PRIVATE QuicFrame {
   explicit QuicFrame(QuicPaddingFrame* padding_frame);
   explicit QuicFrame(QuicStreamFrame* stream_frame);
   explicit QuicFrame(QuicAckFrame* frame);
+  explicit QuicFrame(QuicMtuDiscoveryFrame* frame);
 
   explicit QuicFrame(QuicRstStreamFrame* frame);
   explicit QuicFrame(QuicConnectionCloseFrame* frame);
@@ -894,6 +911,7 @@ struct NET_EXPORT_PRIVATE QuicFrame {
     QuicPaddingFrame* padding_frame;
     QuicStreamFrame* stream_frame;
     QuicAckFrame* ack_frame;
+    QuicMtuDiscoveryFrame* mtu_discovery_frame;
 
     QuicStopWaitingFrame* stop_waiting_frame;
 

@@ -255,9 +255,7 @@ QuicRstStreamErrorCode AdjustErrorForVersion(
 }
 
 QuicRstStreamFrame::QuicRstStreamFrame()
-    : stream_id(0),
-      error_code(QUIC_STREAM_NO_ERROR) {
-}
+    : stream_id(0), error_code(QUIC_STREAM_NO_ERROR), byte_offset(0) {}
 
 QuicRstStreamFrame::QuicRstStreamFrame(QuicStreamId stream_id,
                                        QuicRstStreamErrorCode error_code,
@@ -287,6 +285,10 @@ QuicFrame::QuicFrame(QuicStreamFrame* stream_frame)
 QuicFrame::QuicFrame(QuicAckFrame* frame)
     : type(ACK_FRAME),
       ack_frame(frame) {
+}
+
+QuicFrame::QuicFrame(QuicMtuDiscoveryFrame* frame)
+    : type(MTU_DISCOVERY_FRAME), mtu_discovery_frame(frame) {
 }
 
 QuicFrame::QuicFrame(QuicStopWaitingFrame* frame)
@@ -399,6 +401,10 @@ ostream& operator<<(ostream& os, const QuicFrame& frame) {
     }
     case PING_FRAME: {
       os << "type { PING_FRAME } ";
+      break;
+    }
+    case MTU_DISCOVERY_FRAME: {
+      os << "type { MTU_DISCOVERY_FRAME } ";
       break;
     }
     default: {
@@ -563,6 +569,9 @@ RetransmittableFrames::~RetransmittableFrames() {
         break;
       case ACK_FRAME:
         delete it->ack_frame;
+        break;
+      case MTU_DISCOVERY_FRAME:
+        delete it->mtu_discovery_frame;
         break;
       case STOP_WAITING_FRAME:
         delete it->stop_waiting_frame;

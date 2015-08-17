@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "net/spdy/hpack_decoder.h"
+#include "net/spdy/hpack/hpack_decoder.h"
+
+#include <utility>
 
 #include "base/basictypes.h"
 #include "base/logging.h"
-#include "net/spdy/hpack_constants.h"
-#include "net/spdy/hpack_output_stream.h"
+#include "net/spdy/hpack/hpack_constants.h"
+#include "net/spdy/hpack/hpack_output_stream.h"
 
 namespace net {
 
@@ -36,16 +38,19 @@ bool HpackDecoder::HandleControlFrameHeadersData(SpdyStreamId id,
   if (new_size > kMaxDecodeBufferSize) {
     return false;
   }
-  headers_block_buffer_.insert(headers_block_buffer_.end(),
-                               headers_data,
+  headers_block_buffer_.insert(headers_block_buffer_.end(), headers_data,
                                headers_data + headers_data_length);
   return true;
 }
 
-bool HpackDecoder::HandleControlFrameHeadersComplete(SpdyStreamId id) {
+bool HpackDecoder::HandleControlFrameHeadersComplete(SpdyStreamId id,
+                                                     size_t* compressed_len) {
   HpackInputStream input_stream(max_string_literal_size_,
                                 headers_block_buffer_);
   regular_header_seen_ = false;
+  if (compressed_len) {
+    *compressed_len = headers_block_buffer_.size();
+  }
   while (input_stream.HasMoreData()) {
     if (!DecodeNextOpcode(&input_stream)) {
       headers_block_buffer_.clear();
@@ -64,12 +69,14 @@ bool HpackDecoder::HandleControlFrameHeadersComplete(SpdyStreamId id) {
 
 bool HpackDecoder::HandleHeaderRepresentation(StringPiece name,
                                               StringPiece value) {
-  typedef std::pair<std::map<string, string>::iterator, bool> InsertResult;
+  typedef std::pair<SpdyHeaderBlock::iterator, bool> InsertResult;
 
   // Fail if pseudo-header follows regular header.
   if (name.size() > 0) {
     if (name[0] == kPseudoHeaderPrefix) {
-      if (regular_header_seen_) return false;
+      if (regular_header_seen_) {
+        return false;
+      }
     } else {
       regular_header_seen_ = true;
     }
@@ -87,8 +94,7 @@ bool HpackDecoder::HandleHeaderRepresentation(StringPiece name,
         std::make_pair(name.as_string(), value.as_string()));
     if (!result.second) {
       result.first->second.push_back('\0');
-      result.first->second.insert(result.first->second.end(),
-                                  value.begin(),
+      result.first->second.insert(result.first->second.end(), value.begin(),
                                   value.end());
     }
   }
@@ -136,12 +142,14 @@ bool HpackDecoder::DecodeNextHeaderTableSizeUpdate(
 
 bool HpackDecoder::DecodeNextIndexedHeader(HpackInputStream* input_stream) {
   uint32 index = 0;
-  if (!input_stream->DecodeNextUint32(&index))
+  if (!input_stream->DecodeNextUint32(&index)) {
     return false;
+  }
 
   const HpackEntry* entry = header_table_.GetByIndex(index);
-  if (entry == NULL)
+  if (entry == NULL) {
     return false;
+  }
 
   return HandleHeaderRepresentation(entry->name(), entry->value());
 }
@@ -149,35 +157,43 @@ bool HpackDecoder::DecodeNextIndexedHeader(HpackInputStream* input_stream) {
 bool HpackDecoder::DecodeNextLiteralHeader(HpackInputStream* input_stream,
                                            bool should_index) {
   StringPiece name;
-  if (!DecodeNextName(input_stream, &name))
+  if (!DecodeNextName(input_stream, &name)) {
     return false;
+  }
 
   StringPiece value;
-  if (!DecodeNextStringLiteral(input_stream, false, &value))
+  if (!DecodeNextStringLiteral(input_stream, false, &value)) {
     return false;
+  }
 
-  if (!HandleHeaderRepresentation(name, value)) return false;
+  if (!HandleHeaderRepresentation(name, value)) {
+    return false;
+  }
 
-  if (!should_index)
+  if (!should_index) {
     return true;
+  }
 
   ignore_result(header_table_.TryAddEntry(name, value));
   return true;
 }
 
-bool HpackDecoder::DecodeNextName(
-    HpackInputStream* input_stream, StringPiece* next_name) {
+bool HpackDecoder::DecodeNextName(HpackInputStream* input_stream,
+                                  StringPiece* next_name) {
   uint32 index_or_zero = 0;
-  if (!input_stream->DecodeNextUint32(&index_or_zero))
+  if (!input_stream->DecodeNextUint32(&index_or_zero)) {
     return false;
+  }
 
-  if (index_or_zero == 0)
+  if (index_or_zero == 0) {
     return DecodeNextStringLiteral(input_stream, true, next_name);
+  }
 
   const HpackEntry* entry = header_table_.GetByIndex(index_or_zero);
   if (entry == NULL) {
     return false;
-  } else if (entry->IsStatic()) {
+  }
+  if (entry->IsStatic()) {
     *next_name = entry->name();
   } else {
     // |entry| could be evicted as part of this insertion. Preemptively copy.
@@ -195,12 +211,11 @@ bool HpackDecoder::DecodeNextStringLiteral(HpackInputStream* input_stream,
     bool result = input_stream->DecodeNextHuffmanString(huffman_table_, buffer);
     *output = StringPiece(*buffer);
     return result;
-  } else if (input_stream->MatchPrefixAndConsume(
-      kStringLiteralIdentityEncoded)) {
-    return input_stream->DecodeNextIdentityString(output);
-  } else {
-    return false;
   }
+  if (input_stream->MatchPrefixAndConsume(kStringLiteralIdentityEncoded)) {
+    return input_stream->DecodeNextIdentityString(output);
+  }
+  return false;
 }
 
 }  // namespace net
