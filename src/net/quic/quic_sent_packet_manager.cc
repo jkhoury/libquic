@@ -655,7 +655,7 @@ bool QuicSentPacketManager::MaybeRetransmitTailLossProbe() {
     MarkForRetransmission(sequence_number, TLP_RETRANSMISSION);
     return true;
   }
-#if defined(NDEBUG)
+#if !defined(NDEBUG)
   base::debug::DumpWithoutCrashing();
 #else
   DLOG(ERROR)
