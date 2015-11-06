@@ -234,7 +234,7 @@ void QuicSentPacketManager::OnIncomingAck(const QuicAckFrame& ack_frame,
       rtt_stats_.smoothed_rtt());
     
    // ----------- added by jkhoury --------
-  send_algorithm_->PrintMyStats(ack_receive_time)
+  send_algorithm_->PrintMyStats(ack_receive_time);
 
   // If we have received a truncated ack, then we need to clear out some
   // previous transmissions to allow the peer to actually ACK new packets.

@@ -79,8 +79,8 @@ void TcpCubicBytesSender::SetFromConfig(const QuicConfig& config,
 }
 
     // added by jkhoury
-void PrintMyStats(QuicTime ack_receive_time){
-    std::cout << "Hello from pacing sender \n";
+void TcpCubicBytesSender::PrintMyStats(QuicTime ack_receive_time){
+    std::cout << "Hello from bytes sender \n";
 }
 
 void TcpCubicBytesSender::ResumeConnectionState(
