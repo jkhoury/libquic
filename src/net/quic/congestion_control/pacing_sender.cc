@@ -29,6 +29,11 @@ void PacingSender::SetFromConfig(const QuicConfig& config,
   sender_->SetFromConfig(config, perspective);
 }
 
+// added by jkhoury
+void PacingSender::PrintMyStats(QuicTime ack_receive_time){
+    sender_->PrintMyStats(ack_receive_time);
+}
+    
 void PacingSender::ResumeConnectionState(
     const CachedNetworkParameters& cached_network_params,
     bool max_bandwidth_resumption) {

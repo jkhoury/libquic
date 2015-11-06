@@ -37,6 +37,7 @@ class NET_EXPORT_PRIVATE PacingSender : public SendAlgorithmInterface {
   // SendAlgorithmInterface methods.
   void SetFromConfig(const QuicConfig& config,
                      Perspective perspective) override;
+  void PrintMyStats(QuicTime ack_receive_time) override; // added by jkhoury    
   void ResumeConnectionState(
       const CachedNetworkParameters& cached_network_params,
       bool max_bandwidth_resumption) override;

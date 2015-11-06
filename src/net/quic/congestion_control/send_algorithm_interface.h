@@ -41,6 +41,10 @@ class NET_EXPORT_PRIVATE SendAlgorithmInterface {
 
   virtual void SetFromConfig(const QuicConfig& config,
                              Perspective perspective) = 0;
+  
+  // Added by jkhoury
+  // Sender reporting
+  virtual void PrintMyStats(QuicTime ack_receive_time) = 0;
 
   // Sets the number of connections to emulate when doing congestion control,
   // particularly for congestion avoidance.  Can be set any time.

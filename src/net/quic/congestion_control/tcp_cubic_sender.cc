@@ -12,6 +12,8 @@
 #include "net/quic/crypto/crypto_protocol.h"
 #include "net/quic/proto/cached_network_parameters.pb.h"
 
+#include <iostream>
+
 using std::max;
 using std::min;
 
@@ -26,6 +28,8 @@ const QuicByteCount kMaxSegmentSize = kDefaultTCPMSS;
 const QuicByteCount kMaxBurstBytes = 3 * kMaxSegmentSize;
 const float kRenoBeta = 0.7f;  // Reno backoff factor.
 const uint32 kDefaultNumConnections = 2;  // N-connection emulation.
+// added by jkhoury: sampling time of the reporting stats
+const uint32 SAMPLE_TIME_MICROS =100000; //micros
 }  // namespace
 
 TcpCubicSender::TcpCubicSender(const QuicClock* clock,
@@ -49,7 +53,10 @@ TcpCubicSender::TcpCubicSender(const QuicClock* clock,
       slowstart_threshold_(max_tcp_congestion_window),
       last_cutback_exited_slowstart_(false),
       max_tcp_congestion_window_(max_tcp_congestion_window),
-      clock_(clock) {
+      clock_(clock),
+      lastRcvdAckTime_(clock->Now()),
+      last_congestion_window_(0),
+      perspective_(Perspective::IS_SERVER){
 }
 
 TcpCubicSender::~TcpCubicSender() {
@@ -58,6 +65,7 @@ TcpCubicSender::~TcpCubicSender() {
 
 void TcpCubicSender::SetFromConfig(const QuicConfig& config,
                                    Perspective perspective) {
+  perspective_ = perspective;
   if (perspective == Perspective::IS_SERVER) {
     if (config.HasReceivedConnectionOptions() &&
         ContainsQuicTag(config.ReceivedConnectionOptions(), kIW03)) {
@@ -92,6 +100,40 @@ void TcpCubicSender::SetFromConfig(const QuicConfig& config,
     }
   }
 }
+
+//============================================================
+// added by jkhoury
+void TcpCubicSender::PrintMyStats(QuicTime ack_receive_time){
+    if(ack_receive_time.Subtract(lastRcvdAckTime_).ToMicroseconds() >= SAMPLE_TIME_MICROS
+       && perspective_ == Perspective::IS_SERVER){
+        //       || congestion_window_ != last_congestion_window_) && (perspective_ == Perspective::IS_SERVER)){
+        std::cout << "New sustained bandwidth estimate (KBytes/s): "
+        << BandwidthEstimate().ToKBytesPerSecond()
+        //<< ", pacing_rate: " << send_algorithm_->PacingRate().ToKBytesPerSecond()
+        << ", cwnd (bytes): " << GetCongestionWindow()
+        << ", cwnd (pkts): " << congestion_window_
+        << ", tcp ss: " << InSlowStart()
+        << ", ssthresh: " << slowstart_threshold_
+        << ", tcp inrecovery: " << InRecovery()
+        << ", srtt (micros): " << rtt_stats_->smoothed_rtt().ToMicroseconds()
+        << ", etime (micros): " << ack_receive_time.ToDebuggingValue()
+        << ", wtime (sec):" << clock_->WallNow().ToUNIXSeconds()
+        << ", sent (pkts): " << stats_->packets_sent
+        << ", sent (bytes): " << stats_->bytes_sent
+        << ", rcvd (pkts): " << stats_->packets_received
+        << ", rcvd (bytes): " << stats_->bytes_received
+        << ", loss (events): " << stats_->tcp_loss_events
+        << ", loss (pkts): " << stats_->packets_lost
+        << ", retransmitted (bytes): " << stats_-> bytes_retransmitted
+        << ", retransmitted (pkts): " << stats_-> packets_retransmitted
+        << ", reno: " << reno_
+        << "\n";
+        
+        lastRcvdAckTime_ = ack_receive_time;
+        last_congestion_window_  = congestion_window_;
+    }
+}
+//============================================================
 
 void TcpCubicSender::ResumeConnectionState(
     const CachedNetworkParameters& cached_network_params,

@@ -10,6 +10,7 @@
 #include "net/quic/congestion_control/rtt_stats.h"
 #include "net/quic/crypto/crypto_protocol.h"
 #include "net/quic/proto/cached_network_parameters.pb.h"
+#include <iostream>
 
 using std::max;
 using std::min;
@@ -75,6 +76,11 @@ void TcpCubicBytesSender::SetFromConfig(const QuicConfig& config,
       min_congestion_window_ = kMaxSegmentSize;
     }
   }
+}
+
+    // added by jkhoury
+void PrintMyStats(QuicTime ack_receive_time){
+    std::cout << "Hello from pacing sender \n";
 }
 
 void TcpCubicBytesSender::ResumeConnectionState(

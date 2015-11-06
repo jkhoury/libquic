@@ -145,6 +145,7 @@ void QuicSentPacketManager::SetFromConfig(const QuicConfig& config) {
     send_algorithm_.reset(SendAlgorithmInterface::Create(
         clock_, &rtt_stats_, kCubicBytes, stats_, initial_congestion_window_));
   }
+  //jkhoury -- to disable pacing comment line below
   EnablePacing();
 
   if (config.HasClientSentConnectionOption(k1CON, perspective_)) {
@@ -231,6 +232,9 @@ void QuicSentPacketManager::OnIncomingAck(const QuicAckFrame& ack_frame,
       ack_receive_time,
       clock_->WallNow(),
       rtt_stats_.smoothed_rtt());
+    
+   // ----------- added by jkhoury --------
+  send_algorithm_->PrintMyStats(ack_receive_time)
 
   // If we have received a truncated ack, then we need to clear out some
   // previous transmissions to allow the peer to actually ACK new packets.
